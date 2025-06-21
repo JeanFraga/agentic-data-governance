@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  GCP_PROJECT_ID: YOUR_GCP_PROJECT_ID  # TODO: Replace with your actual GCP project ID
+  GCP_PROJECT_ID: agenticds-hackathon-54443
   GCP_REGION: us-central1
   ARTIFACT_REGISTRY_REPO: webui-adk-repo
   ADK_IMAGE_NAME: adk-backend
