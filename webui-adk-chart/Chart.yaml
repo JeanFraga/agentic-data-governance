@@ -1,0 +1,6 @@
+apiVersion: v2
+name: webui-adk-chart
+description: A Helm chart for deploying Open Web UI with a Google ADK backend.
+type: application
+version: 0.2.0
+appVersion: "1.1.0"

@@ -1,0 +1,27 @@
+# Development configuration with Google Cloud credentials mounted
+services:
+  adk-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: adk-backend-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount Google Cloud credentials for authentication
+      - ~/.config/gcloud:/home/appuser/.config/gcloud:ro
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/appuser/.config/gcloud/application_default_credentials.json
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - adk-network
+
+networks:
+  adk-network:
+    driver: bridge

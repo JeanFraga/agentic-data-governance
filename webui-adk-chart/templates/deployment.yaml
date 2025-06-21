@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.Values.releaseName }}
+  labels:
+    app: {{.Values.releaseName }}
+spec:
+  replicas: {{.Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{.Values.releaseName }}
+  template:
+    metadata:
+      labels:
+        app: {{.Values.releaseName }}
+    spec:
+      volumes:
+        - name: open-webui-data
+          emptyDir: {}
+      containers:
+        # --- Open Web UI Frontend Container ---
+        - name: open-webui
+          image: "{{.Values.openWebUI.image.repository }}:{{.Values.openWebUI.image.tag }}"
+          imagePullPolicy: {{.Values.openWebUI.image.pullPolicy }}
+          ports:
+            - containerPort: {{.Values.openWebUI.service.targetPort }}
+          env:
+            - name: OLLAMA_BASE_URLS
+              value: "http://localhost:{{.Values.adkBackend.port }}/v1"
+            {{- if.Values.openWebUI.sso.enabled }}
+            - name: ENABLE_OAUTH_SIGNUP
+              value: "True"
+            - name: OAUTH_PROVIDER_NAME
+              value: {{.Values.openWebUI.sso.providerName | quote }}
+            - name: OPENID_PROVIDER_URL
+              value: {{.Values.openWebUI.sso.providerUrl | quote }}
+            - name: OAUTH_SCOPES
+              value: {{.Values.openWebUI.sso.scopes | quote }}
+            - name: OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{.Values.releaseName }}-oidc-secret
+                  key: OAUTH_CLIENT_ID
+            - name: OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{.Values.releaseName }}-oidc-secret
+                  key: OAUTH_CLIENT_SECRET
+            {{- end }}
+          volumeMounts:
+            - name: open-webui-data
+              mountPath: /app/backend/data
+
+        # --- Google ADK Backend Container (Sidecar) ---
+        - name: adk-backend
+          image: "{{.Values.adkBackend.image.repository }}:{{.Values.adkBackend.image.tag }}"
+          imagePullPolicy: {{.Values.adkBackend.image.pullPolicy }}
+          ports:
+            - containerPort: {{.Values.adkBackend.port }}
+          env:
+            - name: GOOGLE_GENAI_USE_VERTEXAI
+              value: "TRUE"
+            - name: GOOGLE_CLOUD_PROJECT
+              value: {{.Values.adkBackend.gcp.projectId | quote }}

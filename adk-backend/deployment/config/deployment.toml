@@ -1,0 +1,32 @@
+# Deployment configuration for data science agent
+
+[wheel]
+package_name = "data_science_agent"
+python_tag = "py3"
+abi_tag = "none"
+platform_tag = "any"
+
+[deployment]
+enable_tracing = false
+timeout_seconds = 3600
+memory = "2Gi"
+cpu = "2"
+
+[deployment.production]
+memory = "4Gi"
+cpu = "4"
+enable_tracing = false
+
+[deployment.staging]
+memory = "2Gi"
+cpu = "2"
+enable_tracing = true
+
+[deployment.development]
+memory = "1Gi"
+cpu = "1"
+enable_tracing = true
+
+[agent]
+max_concurrent_requests = 10
+request_timeout = 300

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.Values.releaseName }}-service
+spec:
+  type: {{.Values.openWebUI.service.type }}
+  selector:
+    app: {{.Values.releaseName }}
+  ports:
+    - protocol: TCP
+      port: {{.Values.openWebUI.service.port }}
+      targetPort: {{.Values.openWebUI.service.targetPort }}

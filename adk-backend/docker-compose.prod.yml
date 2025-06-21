@@ -1,0 +1,38 @@
+# Production configuration using service account key file
+services:
+  adk-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: adk-backend-prod
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount service account key file for production
+      - ./service-account-key.json:/home/appuser/service-account-key.json:ro
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/appuser/service-account-key.json
+      # Production environment variables
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - adk-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+networks:
+  adk-network:
+    driver: bridge

@@ -1,0 +1,87 @@
+name: Build and Deploy to GKE with Terraform
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  GCP_PROJECT_ID: YOUR_GCP_PROJECT_ID
+  GCP_REGION: us-central1
+  ARTIFACT_REGISTRY_REPO: webui-adk-repo
+  ADK_IMAGE_NAME: adk-backend
+  GITHUB_REPO: YOUR_GITHUB_USERNAME/YOUR_REPO_NAME
+  APP_HOST: "webui.your-domain.com"
+
+jobs:
+  build-and-push-image:
+    name: Build and Push ADK Backend Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    outputs:
+      image_tag: ${{ steps.get_sha.outputs.sha_short }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get short Git SHA
+        id: get_sha
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and Push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context:./adk-backend
+          push: true
+          tags: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.ADK_IMAGE_NAME }}:${{ steps.get_sha.outputs.sha_short }}
+
+  deploy-with-terraform:
+    name: Deploy Infrastructure and App with Terraform
+    runs-on: ubuntu-latest
+    needs: build-and-push-image
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: 'projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com'
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory:./terraform
+
+      - name: Terraform Apply
+        run: |
+          terraform apply -auto-approve \
+            -var="gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
+            -var="github_repo=${{ env.GITHUB_REPO }}" \
+            -var="app_host=${{ env.APP_HOST }}" \
+            -var="adk_image_tag=${{ needs.build-and-push-image.outputs.image_tag }}" \
+            -var="oauth_client_id=${{ secrets.OAUTH_CLIENT_ID }}" \
+            -var="oauth_client_secret=${{ secrets.OAUTH_CLIENT_SECRET }}"
+        working-directory:./terraform

@@ -1,0 +1,49 @@
+# Global settings
+replicaCount: 1
+releaseName: "webui-adk"
+
+# Open WebUI Frontend Configuration
+openWebUI:
+  image:
+    repository: ghcr.io/open-webui/open-webui
+    tag: main
+    pullPolicy: IfNotPresent
+  service:
+    # Service type is now ClusterIP, as it's exposed via Ingress
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+  # OIDC/SSO Configuration for Google
+  sso:
+    enabled: true
+    clientId: "YOUR_CLIENT_ID_FROM_GOOGLE_CLOUD"
+    clientSecret: "YOUR_CLIENT_SECRET_FROM_GOOGLE_CLOUD"
+    providerUrl: "https://accounts.google.com/.well-known/openid-configuration"
+    providerName: "Google"
+    scopes: "openid email profile"
+
+# ADK Backend (Sidecar) Configuration
+adkBackend:
+  image:
+    repository: "us-central1-docker.pkg.dev/your-gcp-project/adk-repo/adk-backend"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  port: 8000
+  gcp:
+    projectId: "your-gcp-project"
+
+# NEW: Ingress Configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "webui.example.com"
+  annotations:
+    # Allows for large file uploads through Open WebUI RAG
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    # Increases timeouts for long-running LLM requests
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+  tls:
+    enabled: true
+    # This secret should be created in the cluster, e.g., by cert-manager
+    secretName: "webui-tls-secret"

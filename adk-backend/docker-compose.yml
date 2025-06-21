@@ -1,0 +1,37 @@
+services:
+  adk-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: adk-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount Google Cloud credentials for authentication
+      - ~/.config/gcloud:/home/appuser/.config/gcloud:ro
+      # Optional: Mount local .env file if you want to modify it without rebuilding
+      # - ./.env:/home/appuser/.env:ro
+    environment:
+      # Set the path to Google Cloud credentials
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/appuser/.config/gcloud/application_default_credentials.json
+      # Optional: Override any environment variables here
+      # - GOOGLE_CLOUD_PROJECT=your-project-id
+      # - BQ_PROJECT_ID=your-project-id
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - adk-network
+
+networks:
+  adk-network:
+    driver: bridge
+
+# Optional: Add volumes for persistent data if needed
+# volumes:
+#   adk-data:
+#     driver: local
