@@ -45,7 +45,7 @@ jobs:
       - name: Build and Push Docker image
         uses: docker/build-push-action@v5
         with:
-          context:./adk-backend
+          context: ./adk-backend
           push: true
           tags: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.ADK_IMAGE_NAME }}:${{ steps.get_sha.outputs.sha_short }}
 

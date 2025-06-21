@@ -167,7 +167,21 @@ resource "helm_release" "webui_adk_app" {
   name       = "webui-adk"
   chart      = "../webui-adk-chart"
   namespace  = "default"
-  values =
+  
+  values = [
+    templatefile("${path.module}/../webui-adk-chart/values.yaml", {
+      image_repository = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${local.adk_image_name}"
+      image_tag        = var.adk_image_tag
+      app_host         = var.app_host
+      oauth_client_id  = var.oauth_client_id
+    })
+  ]
+
+  set_sensitive {
+    name  = "oauth.clientSecret"
+    value = var.oauth_client_secret
+  }
+
   depends_on = [
     helm_release.ingress_nginx,
     kubernetes_manifest.letsencrypt_issuer
