@@ -6,12 +6,12 @@ on:
       - main
 
 env:
-  GCP_PROJECT_ID: YOUR_GCP_PROJECT_ID
+  GCP_PROJECT_ID: YOUR_GCP_PROJECT_ID  # TODO: Replace with your actual GCP project ID
   GCP_REGION: us-central1
   ARTIFACT_REGISTRY_REPO: webui-adk-repo
   ADK_IMAGE_NAME: adk-backend
-  GITHUB_REPO: YOUR_GITHUB_USERNAME/YOUR_REPO_NAME
-  APP_HOST: "webui.your-domain.com"
+  GITHUB_REPO: JeanFraga/agentic-data-governance
+  APP_HOST: "webui.your-domain.com"  # TODO: Replace with your actual domain
 
 jobs:
   build-and-push-image:

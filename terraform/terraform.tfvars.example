@@ -1,0 +1,10 @@
+# Example Terraform variables file
+# Copy this to terraform.tfvars and update with your actual values
+# DO NOT commit terraform.tfvars to Git (it's in .gitignore)
+
+gcp_project_id      = "your-gcp-project-id"  # Replace with your actual GCP project ID
+github_repo         = "JeanFraga/agentic-data-governance"
+app_host            = "webui.your-domain.com"  # Replace with your actual domain
+oauth_client_id     = "your-google-client-id.apps.googleusercontent.com"  # Replace with your OAuth Client ID
+oauth_client_secret = "your-google-client-secret"  # Replace with your OAuth Client Secret
+adk_image_tag       = "latest"  # Or a specific tag you've built and pushed manually
