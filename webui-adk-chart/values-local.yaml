@@ -1,0 +1,55 @@
+# Local deployment values for webui-adk-chart
+# This file contains settings optimized for local development
+
+# Global settings
+replicaCount: 1
+releaseName: "webui-adk-local"
+
+# Open WebUI Frontend Configuration
+openWebUI:
+  image:
+    repository: ghcr.io/open-webui/open-webui
+    tag: main
+    pullPolicy: IfNotPresent
+  service:
+    # Use NodePort for local access
+    type: NodePort
+    port: 80
+    targetPort: 8080
+    nodePort: 30080
+  # OIDC/SSO Configuration - disabled for local development
+  sso:
+    enabled: false
+    clientId: ""
+    clientSecret: ""
+    providerUrl: ""
+    providerName: ""
+    scopes: ""
+
+# ADK Backend Configuration
+adkBackend:
+  image:
+    # Use the locally built ADK backend image
+    repository: "adk-backend"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  port: 8000
+  gcp:
+    projectId: "local-development"
+
+# Ingress Configuration - disabled for local development
+ingress:
+  enabled: false
+  className: ""
+  host: "localhost"
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""
+
+# Local development specific settings
+local:
+  # Expose services via NodePort for easy access
+  exposeServices: true
+  # Use host networking for easier debugging
+  hostNetwork: false

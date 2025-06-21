@@ -10,3 +10,6 @@ spec:
     - protocol: TCP
       port: {{.Values.openWebUI.service.port }}
       targetPort: {{.Values.openWebUI.service.targetPort }}
+      {{- if and (eq .Values.openWebUI.service.type "NodePort") .Values.openWebUI.service.nodePort }}
+      nodePort: {{.Values.openWebUI.service.nodePort }}
+      {{- end }}
