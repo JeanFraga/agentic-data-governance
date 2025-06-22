@@ -1,7 +1,7 @@
 FROM python:3.13-slim
 
-# Install dependencies
-RUN pip install fastapi uvicorn aiohttp
+# Install dependencies for LiteLLM proxy
+RUN pip install fastapi uvicorn litellm requests
 
 # Create app user
 RUN useradd --create-home appuser

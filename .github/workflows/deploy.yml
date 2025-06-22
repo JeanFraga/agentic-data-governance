@@ -6,12 +6,11 @@ on:
       - main
 
 env:
-  GCP_PROJECT_ID: agenticds-hackathon-54443
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GCP_REGION: us-central1
   ARTIFACT_REGISTRY_REPO: webui-adk-repo
   ADK_IMAGE_NAME: adk-backend
   OLLAMA_PROXY_IMAGE_NAME: ollama-proxy
-  GITHUB_REPO: JeanFraga/agentic-data-governance
   APP_HOST: "webui.your-domain.com"  # TODO: Replace with your actual domain
 
 jobs:
@@ -89,7 +88,7 @@ jobs:
         run: |
           terraform apply -auto-approve \
             -var="gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
-            -var="github_repo=${{ env.GITHUB_REPO }}" \
+            -var="github_repo=${{ github.repository }}" \
             -var="app_host=${{ env.APP_HOST }}" \
             -var="adk_image_tag=${{ needs.build-and-push-images.outputs.image_tag }}" \
             -var="ollama_proxy_image_tag=${{ needs.build-and-push-images.outputs.image_tag }}" \

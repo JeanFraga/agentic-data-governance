@@ -23,7 +23,7 @@ services:
     networks:
       - adk-network
 
-  # Ollama Proxy Service (Translation Layer)
+  # Ollama Proxy Service (LiteLLM-based Translation Layer)
   ollama-proxy:
     build:
       context: .
@@ -31,9 +31,30 @@ services:
     container_name: ollama-proxy
     ports:
       - "11434:11434"  # Ollama default port
+    volumes:
+      # Mount Google Cloud credentials for Vertex AI authentication
+      - ~/.config/gcloud:/home/appuser/.config/gcloud:ro
     environment:
-      - ADK_BACKEND_URL=http://adk-backend:8000
+      # Proxy configuration
       - PROXY_PORT=11434
+      - DEFAULT_MODEL=gemini-2.0-flash-exp
+      - LOG_LEVEL=INFO
+      
+      # Google Cloud / Vertex AI authentication
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/appuser/.config/gcloud/application_default_credentials.json
+      - GOOGLE_GENAI_USE_VERTEXAI=TRUE
+      - VERTEXAI_PROJECT=${GOOGLE_CLOUD_PROJECT:-your-project-id}
+      - VERTEXAI_LOCATION=us-central1
+      
+      # Alternative: Google AI Studio API key (uncomment if preferred)
+      # - GOOGLE_AI_STUDIO_API_KEY=${GOOGLE_AI_STUDIO_API_KEY}
+      # - GEMINI_API_KEY=${GEMINI_API_KEY}
+      
+      # Alternative: OpenAI API key (uncomment if preferred)
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # Alternative: Anthropic API key (uncomment if preferred)
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     depends_on:
       - adk-backend
     restart: unless-stopped

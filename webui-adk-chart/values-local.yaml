@@ -26,15 +26,26 @@ openWebUI:
     type: NodePort
     port: 80
     targetPort: 8080
-    nodePort: 30080
-  # OIDC/SSO Configuration - disabled for local development
+    nodePort: ${SERVICE_NODE_PORT}
+  # OIDC/SSO Configuration - enabled for local development
   sso:
-    enabled: false
-    clientId: ""
-    clientSecret: ""
-    providerUrl: ""
-    providerName: ""
-    scopes: ""
+    enabled: true
+    clientId: "${OAUTH_CLIENT_ID}"
+    clientSecret: "${OAUTH_CLIENT_SECRET}"
+    providerUrl: "https://accounts.google.com/.well-known/openid-configuration"
+    providerName: "Google"
+    scopes: "openid email profile"
+  # Auto-create admin account configuration
+  admin:
+    email: "${ADMIN_EMAIL}"
+    password: "${ADMIN_PASSWORD}"
+    autoCreate: true
+  # Authentication settings
+  auth:
+    disableSignup: false  # Allow new users via both SSO and password
+    enableOAuth: true
+    enablePasswordLogin: true  # Enable username/password login
+    requireEmailVerification: false
 
 # ADK Backend Configuration
 adkBackend:
@@ -43,11 +54,11 @@ adkBackend:
     repository: "adk-backend"
     tag: "local"
     pullPolicy: IfNotPresent
-  port: 8000
+  port: ${ADK_BACKEND_PORT}
   gcp:
-    projectId: "agenticds-hackathon-54443"
-    # Mount local gcloud credentials for authentication
-    credentialsPath: "/Users/jeanfraga/.config/gcloud"
+    projectId: "${GCP_PROJECT_ID}"
+    # Don't mount local credentials in GKE Autopilot - use Workload Identity instead
+    credentialsPath: ""
   env:
     # Enable Vertex AI for local testing with credentials
     GOOGLE_GENAI_USE_VERTEXAI: "TRUE"
@@ -78,5 +89,5 @@ ollamaProxy:
     repository: "ollama-proxy"
     tag: "local"
     pullPolicy: IfNotPresent
-  port: 11434
+  port: ${OLLAMA_PROXY_PORT}
   logLevel: "INFO"

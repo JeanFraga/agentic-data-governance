@@ -33,6 +33,17 @@ openWebUI:
     providerUrl: "https://accounts.google.com/.well-known/openid-configuration"
     providerName: "Google"
     scopes: "openid email profile"
+  # Auto-create admin account configuration
+  admin:
+    email: "${admin_email}"  # Default admin email (should be set via environment)
+    password: "${admin_password}"  # Default admin password (should be set via environment)
+    autoCreate: true
+  # Authentication settings
+  auth:
+    disableSignup: false  # Allow new users via both SSO and password
+    enableOAuth: true
+    enablePasswordLogin: true  # Enable username/password login
+    requireEmailVerification: false
 
 # ADK Backend (Sidecar) Configuration
 adkBackend:
@@ -44,9 +55,9 @@ adkBackend:
   gcp:
     projectId: "your-gcp-project"
 
-# NEW: Ingress Configuration
+# Ingress Configuration
 ingress:
-  enabled: true
+  enabled: ${enable_ingress}
   className: "nginx"
   host: "${app_host}"
   annotations:
@@ -55,10 +66,12 @@ ingress:
     # Increases timeouts for long-running LLM requests
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    # Enable automatic TLS certificate generation (when TLS is enabled)
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
   tls:
-    enabled: true
-    # This secret should be created in the cluster, e.g., by cert-manager
-    secretName: "webui-tls-secret"
+    enabled: ${enable_tls}
+    # This secret will be automatically created by cert-manager
+    secretName: "${app_host}-tls-secret"
 
 # Ollama Proxy Configuration
 ollamaProxy:
@@ -68,3 +81,8 @@ ollamaProxy:
     pullPolicy: IfNotPresent
   port: 11434
   logLevel: "INFO"
+
+# Workload Identity Configuration (for GKE)
+workloadIdentity:
+  enabled: true
+  gcpServiceAccount: ""  # Will be set by Terraform

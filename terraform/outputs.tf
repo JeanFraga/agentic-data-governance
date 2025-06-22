@@ -20,16 +20,31 @@ output "ollama_image_uri" {
 
 output "ingress_ip" {
   description = "The external IP address of the NGINX Ingress Controller."
-  value = try(
-    data.kubernetes_service.ingress_nginx_controller.status.load_balancer.ingress.ip,
+  value = var.deploy_kubernetes_resources ? try(
+    data.kubernetes_service.ingress_nginx_controller[0].status[0].load_balancer[0].ingress[0].ip,
     "IP not available yet. Check status with 'kubectl get svc -n ingress-nginx'"
-  )
+  ) : "Kubernetes resources not deployed"
 }
 
-data "kubernetes_service" "ingress_nginx_controller" {
-  metadata {
-    name      = "ingress-nginx-controller"
-    namespace = helm_release.ingress_nginx.namespace
-  }
-  depends_on = [helm_release.ingress_nginx]
+# Domain and DNS outputs
+output "dns_zone_name_servers" {
+  description = "The name servers for the DNS zone (configure these at your domain registrar)."
+  value = var.create_dns_zone ? google_dns_managed_zone.domain_zone[0].name_servers : []
+}
+
+output "app_url" {
+  description = "The URL where your application will be accessible."
+  value = var.deploy_kubernetes_resources ? (
+    var.enable_https ? "https://${var.app_host}" : "http://${var.app_host}"
+  ) : "Application not deployed yet"
+}
+
+output "dns_zone_id" {
+  description = "The ID of the DNS zone (if created)."
+  value = var.create_dns_zone ? google_dns_managed_zone.domain_zone[0].id : null
+}
+
+output "domain_setup_complete" {
+  description = "Whether domain setup is complete and DNS records are created."
+  value = var.create_dns_zone && var.deploy_kubernetes_resources
 }

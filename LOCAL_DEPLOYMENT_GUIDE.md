@@ -23,6 +23,13 @@ helm get values webui-adk-local -n webui-adk-local    # View current values
 # After making changes to the chart:
 helm upgrade webui-adk-local . --namespace webui-adk-local --values values-local.yaml
 
+# For local deployments with environment variables, use processed values:
+envsubst < values-local.yaml > /tmp/values-processed.yaml
+helm upgrade webui-adk-local . --namespace webui-adk-local --values /tmp/values-processed.yaml
+
+# Force recreate pods after image updates (use with caution):
+helm upgrade webui-adk-local . --namespace webui-adk-local --values /tmp/values-processed.yaml --force
+
 ## Uninstalling
 helm uninstall webui-adk-local -n webui-adk-local     # Remove the release
 kubectl delete namespace webui-adk-local              # Remove the namespace
@@ -32,6 +39,10 @@ kubectl delete namespace webui-adk-local              # Remove the namespace
 cd "../adk-backend"
 docker build -t adk-backend:local .
 # Then upgrade the helm release to restart pods with new image
+cd "../webui-adk-chart"
+helm upgrade webui-adk-local . --namespace webui-adk-local \
+  --set adkBackend.image.pullPolicy=Never \
+  --set adkBackend.image.tag=local
 
 ## Testing Connectivity
 curl -I http://localhost:30080                        # Test NodePort

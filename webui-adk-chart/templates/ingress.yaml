@@ -1,27 +1,32 @@
-{{- if.Values.ingress.enabled -}}
+{{- if .Values.ingress.enabled -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{.Values.releaseName }}-ingress
+  name: {{ .Values.releaseName }}-ingress
   annotations:
-    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- range $key, $value := .Values.ingress.annotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+    {{- if .Values.ingress.tls.enabled }}
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    {{- end }}
 spec:
-  ingressClassName: {{.Values.ingress.className }}
-  {{- if.Values.ingress.tls.enabled }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
-        - {{.Values.ingress.host | quote }}
-      secretName: {{.Values.ingress.tls.secretName }}
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
-    - host: {{.Values.ingress.host | quote }}
+    - host: {{ .Values.ingress.host | quote }}
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: {{.Values.releaseName }}-service
+                name: {{ .Values.releaseName }}-service
                 port:
-                  number: {{.Values.openWebUI.service.port }}
+                  number: {{ .Values.openWebUI.service.port }}
 {{- end }}

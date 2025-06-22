@@ -1,201 +1,458 @@
 #!/usr/bin/env python3
 """
-Ollama Proxy Service
-This service acts as a translation layer between OpenWebUI and the ADK agent.
-It receives OpenAI-compatible requests from OpenWebUI via Ollama and forwards them to the ADK backend.
+LiteLLM-based Ollama-compatible proxy for seamless integration with OpenWebUI.
+This proxy provides an Ollama-compatible API that routes requests to various LLM providers
+(Google Vertex AI, Google AI Studio, OpenAI, Anthropic) via LiteLLM.
 """
 
+import os
 import json
 import logging
-import os
-import aiohttp
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import StreamingResponse, JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-from typing import Dict, Any
+import asyncio
 from datetime import datetime
+from typing import Dict, List, Optional, Any, AsyncGenerator
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse, JSONResponse
+from pydantic import BaseModel, Field
+import litellm
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Ollama ADK Proxy", description="Proxy service between Ollama/OpenWebUI and ADK Agent")
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Configuration
-ADK_BACKEND_URL = os.getenv("ADK_BACKEND_URL", "http://adk-backend:8000")
+# Environment variables for configuration
+LITELLM_PROVIDER = os.getenv("LITELLM_PROVIDER", "google_ai_studio")
+PROXY_HOST = os.getenv("PROXY_HOST", "0.0.0.0")
 PROXY_PORT = int(os.getenv("PROXY_PORT", "11434"))
 
-class OllamaADKTranslator:
-    """Handles translation between Ollama/OpenWebUI format and ADK format"""
+# Provider-specific environment setup
+def setup_provider_environment():
+    """Set up environment variables based on the selected provider."""
+    provider = LITELLM_PROVIDER.lower()
     
-    def __init__(self, adk_url: str):
-        self.adk_url = adk_url
-        self.session = None
-    
-    async def get_session(self):
-        if self.session is None:
-            self.session = aiohttp.ClientSession()
-        return self.session
-    
-    async def close_session(self):
-        if self.session:
-            await self.session.close()
-    
-    def translate_ollama_to_adk(self, ollama_request: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert Ollama chat completion request to ADK format"""
-        messages = ollama_request.get("messages", [])
-        user_message = ""
+    if provider in ["vertex_ai", "google_vertex_ai"]:
+        # Vertex AI setup
+        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+            logger.warning("GOOGLE_APPLICATION_CREDENTIALS not set for Vertex AI")
+        project_id = os.getenv("VERTEX_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
+        if project_id:
+            os.environ["VERTEX_PROJECT"] = project_id
+        location = os.getenv("VERTEX_LOCATION", "us-central1")
+        os.environ["VERTEX_LOCATION"] = location
         
-        if messages:
-            for msg in reversed(messages):
-                if msg.get("role") == "user":
-                    user_message = msg.get("content", "")
-                    break
-        
-        # ADK web interface format for /run endpoint
-        # Correct message format: parts must contain objects with "text" field
-        adk_request = {
-            "appName": "data_science_agent",
-            "userId": "openwebui_user",
-            "sessionId": "openwebui_session",
-            "newMessage": {
-                "role": "user",
-                "parts": [{"text": user_message}]
-            }
-        }
-        
-        return adk_request
-    
-    def translate_adk_to_ollama(self, adk_response: Dict[str, Any], model: str) -> Dict[str, Any]:
-        """Convert ADK response to Ollama chat completion format"""
-        content = ""
-        
-        # ADK returns a list of events, find the one with content
-        if isinstance(adk_response, list):
-            for event in adk_response:
-                if isinstance(event, dict) and event.get("content"):
-                    content_obj = event["content"]
-                    if isinstance(content_obj, dict) and content_obj.get("parts"):
-                        parts = content_obj["parts"]
-                        if isinstance(parts, list) and len(parts) > 0:
-                            first_part = parts[0]
-                            if isinstance(first_part, dict) and first_part.get("text"):
-                                content = first_part["text"]
-                                break
-        
-        # Fallback to string representation if no content found
-        if not content:
-            content = str(adk_response)
-        
-        current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-        
-        return {
-            "model": model,
-            "created_at": current_time,
-            "message": {
-                "role": "assistant",
-                "content": content
-            },
-            "done": True
-        }
-    
-    async def forward_to_adk(self, adk_request: Dict[str, Any]) -> Dict[str, Any]:
-        """Forward request to ADK backend and get response"""
-        session = await self.get_session()
-        
-        try:
-            # First ensure session exists
-            session_url = f"{self.adk_url}/apps/{adk_request['appName']}/users/{adk_request['userId']}/sessions"
-            try:
-                async with session.post(
-                    session_url,
-                    json={"appName": adk_request['appName'], "userId": adk_request['userId']},
-                    timeout=10
-                ) as response:
-                    if response.status == 200:
-                        session_data = await response.json()
-                        actual_session_id = session_data.get('id', adk_request['sessionId'])
-                        adk_request['sessionId'] = actual_session_id
-            except:
-                pass  # Session might already exist, continue with original session_id
+    elif provider in ["google_ai_studio", "gemini"]:
+        # Google AI Studio setup
+        api_key = os.getenv("GOOGLE_AI_STUDIO_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if api_key:
+            os.environ["GOOGLE_API_KEY"] = api_key
+        else:
+            logger.warning("No API key found for Google AI Studio")
             
-            # Send message using /run endpoint
-            async with session.post(
-                f"{self.adk_url}/run",
-                json=adk_request,
-                headers={"Content-Type": "application/json"},
-                timeout=30
-            ) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    error_text = await response.text()
-                    logger.error(f"ADK backend error {response.status}: {error_text}")
-                    raise HTTPException(status_code=503, detail=f"ADK backend error: {error_text}")
-                    
-        except aiohttp.ClientError as e:
-            logger.error(f"Connection error to ADK backend: {e}")
-            raise HTTPException(status_code=503, detail="ADK backend unavailable")
-
-# Initialize translator
-translator = OllamaADKTranslator(ADK_BACKEND_URL)
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Starting Ollama ADK Proxy on port %s", PROXY_PORT)
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    await translator.close_session()
-
-@app.get("/api/tags")
-async def get_models():
-    """Return available models (required by Ollama API)"""
-    return {
-        "models": [
-            {
-                "model": "adk-agent:latest",  # Changed from "name" to "model"
-                "name": "adk-agent:latest",   # Keep "name" for compatibility
-                "modified_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                "size": 3826793677,
-                "digest": "sha256:bc07c81de745696fdf5afca05e065818a8149fb0c77266fb584d9b2cba3711ab"
-            }
-        ]
-    }
-
-@app.post("/api/chat")
-async def chat_completion(request: Request):
-    """Handle chat completion requests from Ollama/OpenWebUI"""
-    try:
-        ollama_request = await request.json()
-        logger.info("Received Ollama request")
-        
-        adk_request = translator.translate_ollama_to_adk(ollama_request)
-        adk_response = await translator.forward_to_adk(adk_request)
-        
-        model = ollama_request.get("model", "adk-agent")
-        ollama_response = translator.translate_adk_to_ollama(adk_response, model)
-        
-        return JSONResponse(ollama_response)
+    elif provider == "openai":
+        # OpenAI setup
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("OPENAI_API_KEY not set")
             
-    except Exception as e:
-        logger.error("Error processing chat request: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+    elif provider == "anthropic":
+        # Anthropic setup
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            logger.warning("ANTHROPIC_API_KEY not set")
+
+# Set up provider environment on import
+setup_provider_environment()
+
+# Enhanced model mapping with latest models
+MODEL_MAPPING = {
+    # Google AI Studio / Gemini models
+    "gemini-2.0-flash": "gemini/gemini-2.0-flash",
+    "gemini-2.0-flash-exp": "gemini/gemini-2.0-flash-exp",
+    "gemini-1.5-flash": "gemini/gemini-1.5-flash",
+    "gemini-1.5-flash-8b": "gemini/gemini-1.5-flash-8b",
+    "gemini-1.5-pro": "gemini/gemini-1.5-pro",
+    "gemini-pro": "gemini/gemini-pro",
+    "gemini-pro-vision": "gemini/gemini-pro-vision",
+    
+    # Vertex AI models
+    "gemini-2.0-flash-vertex": "vertex_ai/gemini-2.0-flash",
+    "gemini-1.5-flash-vertex": "vertex_ai/gemini-1.5-flash",
+    "gemini-1.5-pro-vertex": "vertex_ai/gemini-1.5-pro",
+    "gemini-pro-vertex": "vertex_ai/gemini-pro",
+    
+    # OpenAI models
+    "gpt-4o": "openai/gpt-4o",
+    "gpt-4o-mini": "openai/gpt-4o-mini",
+    "gpt-4-turbo": "openai/gpt-4-turbo",
+    "gpt-4": "openai/gpt-4",
+    "gpt-3.5-turbo": "openai/gpt-3.5-turbo",
+    "o1": "openai/o1",
+    "o1-mini": "openai/o1-mini",
+    
+    # Anthropic models
+    "claude-3-5-sonnet": "anthropic/claude-3-5-sonnet-20241022",
+    "claude-3-5-haiku": "anthropic/claude-3-5-haiku-20241022",
+    "claude-3-opus": "anthropic/claude-3-opus-20240229",
+    "claude-3-sonnet": "anthropic/claude-3-sonnet-20240229",
+    "claude-3-haiku": "anthropic/claude-3-haiku-20240307",
+}
+
+# Default models per provider
+DEFAULT_MODELS = {
+    "google_ai_studio": "gemini-2.0-flash",
+    "gemini": "gemini-2.0-flash",
+    "vertex_ai": "gemini-2.0-flash-vertex",
+    "google_vertex_ai": "gemini-2.0-flash-vertex",
+    "openai": "gpt-4o",
+    "anthropic": "claude-3-5-sonnet",
+}
+
+def get_default_model() -> str:
+    """Get the default model for the current provider."""
+    return DEFAULT_MODELS.get(LITELLM_PROVIDER.lower(), "gemini-2.0-flash")
+
+def map_model_name(ollama_model: str) -> str:
+    """Map Ollama model name to LiteLLM format."""
+    # Direct mapping first
+    if ollama_model in MODEL_MAPPING:
+        return MODEL_MAPPING[ollama_model]
+    
+    # Provider-specific fallbacks
+    provider = LITELLM_PROVIDER.lower()
+    
+    if provider in ["google_ai_studio", "gemini"]:
+        if "gemini" not in ollama_model:
+            return f"gemini/{get_default_model()}"
+        return f"gemini/{ollama_model}"
+    elif provider in ["vertex_ai", "google_vertex_ai"]:
+        if "gemini" not in ollama_model:
+            return f"vertex_ai/{get_default_model().replace('-vertex', '')}"
+        return f"vertex_ai/{ollama_model.replace('-vertex', '')}"
+    elif provider == "openai":
+        if "gpt" not in ollama_model.lower() and "o1" not in ollama_model.lower():
+            return f"openai/{get_default_model()}"
+        return f"openai/{ollama_model}"
+    elif provider == "anthropic":
+        if "claude" not in ollama_model.lower():
+            return f"anthropic/{MODEL_MAPPING[get_default_model()]}"
+        return f"anthropic/{ollama_model}"
+    
+    # Fallback to default model
+    return MODEL_MAPPING[get_default_model()]
+
+# Pydantic models for request/response
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    model: str
+    messages: List[ChatMessage]
+    stream: bool = False
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    top_p: Optional[float] = None
+
+class GenerateRequest(BaseModel):
+    model: str
+    prompt: str
+    stream: bool = False
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+
+class ModelInfo(BaseModel):
+    name: str
+    size: Optional[int] = None
+    digest: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+
+class ModelListResponse(BaseModel):
+    models: List[ModelInfo]
+
+# Global FastAPI app
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan management."""
+    # Startup
+    logger.info(f"Starting LiteLLM Ollama Proxy on {PROXY_HOST}:{PROXY_PORT}")
+    logger.info(f"Provider: {LITELLM_PROVIDER}")
+    logger.info(f"Default model: {get_default_model()}")
+    
+    # Set LiteLLM configuration
+    litellm.drop_params = True
+    litellm.set_verbose = False
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down LiteLLM Ollama Proxy")
+
+app = FastAPI(title="LiteLLM Ollama Proxy", lifespan=lifespan)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "ollama-adk-proxy"}
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "provider": LITELLM_PROVIDER,
+        "default_model": get_default_model(),
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/tags")
+async def get_models():
+    """Get available models (Ollama-compatible endpoint)."""
+    try:
+        # Return available models based on current provider
+        provider = LITELLM_PROVIDER.lower()
+        available_models = []
+        
+        if provider in ["google_ai_studio", "gemini"]:
+            models = ["gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash", 
+                     "gemini-1.5-flash-8b", "gemini-1.5-pro", "gemini-pro"]
+        elif provider in ["vertex_ai", "google_vertex_ai"]:
+            models = ["gemini-2.0-flash-vertex", "gemini-1.5-flash-vertex", 
+                     "gemini-1.5-pro-vertex", "gemini-pro-vertex"]
+        elif provider == "openai":
+            models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo", "o1", "o1-mini"]
+        elif provider == "anthropic":
+            models = ["claude-3-5-sonnet", "claude-3-5-haiku", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku"]
+        else:
+            models = list(MODEL_MAPPING.keys())
+        
+        for model in models:
+            available_models.append({
+                "name": model,
+                "size": 0,
+                "digest": f"sha256:{model.replace('-', '')}",
+                "details": {
+                    "provider": provider,
+                    "litellm_model": map_model_name(model)
+                }
+            })
+        
+        return {"models": available_models}
+    
+    except Exception as e:
+        logger.error(f"Error getting models: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting models: {str(e)}")
+
+@app.post("/api/chat")
+async def chat_completion(request: ChatRequest):
+    """Chat completion endpoint (Ollama-compatible)."""
+    try:
+        litellm_model = map_model_name(request.model)
+        
+        # Convert messages to LiteLLM format
+        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+        
+        # Prepare arguments for LiteLLM
+        kwargs = {
+            "model": litellm_model,
+            "messages": messages,
+            "stream": request.stream,
+        }
+        
+        # Add optional parameters
+        if request.temperature is not None:
+            kwargs["temperature"] = request.temperature
+        if request.max_tokens is not None:
+            kwargs["max_tokens"] = request.max_tokens
+        if request.top_p is not None:
+            kwargs["top_p"] = request.top_p
+        
+        if request.stream:
+            return StreamingResponse(
+                stream_chat_response(kwargs),
+                media_type="application/x-ndjson"
+            )
+        else:
+            response = await litellm.acompletion(**kwargs)
+            
+            # Convert to Ollama format
+            ollama_response = {
+                "model": request.model,
+                "created_at": datetime.now().isoformat(),
+                "message": {
+                    "role": response.choices[0].message.role,
+                    "content": response.choices[0].message.content
+                },
+                "done": True
+            }
+            
+            return ollama_response
+            
+    except Exception as e:
+        logger.error(f"Error in chat completion: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Chat completion error: {str(e)}")
+
+async def stream_chat_response(kwargs: Dict[str, Any]) -> AsyncGenerator[str, None]:
+    """Stream chat completion responses."""
+    try:
+        response = await litellm.acompletion(**kwargs)
+        
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta:
+                delta = chunk.choices[0].delta
+                if hasattr(delta, 'content') and delta.content:
+                    ollama_chunk = {
+                        "model": kwargs.get("model", "").split("/")[-1],
+                        "created_at": datetime.now().isoformat(),
+                        "message": {
+                            "role": "assistant",
+                            "content": delta.content
+                        },
+                        "done": False
+                    }
+                    yield f"data: {json.dumps(ollama_chunk)}\n\n"
+        
+        # Send final chunk
+        final_chunk = {
+            "model": kwargs.get("model", "").split("/")[-1],
+            "created_at": datetime.now().isoformat(),
+            "message": {
+                "role": "assistant",
+                "content": ""
+            },
+            "done": True
+        }
+        yield f"data: {json.dumps(final_chunk)}\n\n"
+        
+    except Exception as e:
+        logger.error(f"Error in streaming: {str(e)}")
+        error_chunk = {
+            "error": str(e),
+            "done": True
+        }
+        yield f"data: {json.dumps(error_chunk)}\n\n"
+
+@app.post("/api/generate")
+async def generate_completion(request: GenerateRequest):
+    """Generate completion endpoint (Ollama-compatible)."""
+    try:
+        litellm_model = map_model_name(request.model)
+        
+        # Convert prompt to messages format
+        messages = [{"role": "user", "content": request.prompt}]
+        
+        # Prepare arguments for LiteLLM
+        kwargs = {
+            "model": litellm_model,
+            "messages": messages,
+            "stream": request.stream,
+        }
+        
+        # Add optional parameters
+        if request.temperature is not None:
+            kwargs["temperature"] = request.temperature
+        if request.max_tokens is not None:
+            kwargs["max_tokens"] = request.max_tokens
+        
+        if request.stream:
+            return StreamingResponse(
+                stream_generate_response(kwargs),
+                media_type="application/x-ndjson"
+            )
+        else:
+            response = await litellm.acompletion(**kwargs)
+            
+            # Convert to Ollama format
+            ollama_response = {
+                "model": request.model,
+                "created_at": datetime.now().isoformat(),
+                "response": response.choices[0].message.content,
+                "done": True
+            }
+            
+            return ollama_response
+            
+    except Exception as e:
+        logger.error(f"Error in generate completion: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Generate completion error: {str(e)}")
+
+async def stream_generate_response(kwargs: Dict[str, Any]) -> AsyncGenerator[str, None]:
+    """Stream generate completion responses."""
+    try:
+        response = await litellm.acompletion(**kwargs)
+        
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta:
+                delta = chunk.choices[0].delta
+                if hasattr(delta, 'content') and delta.content:
+                    ollama_chunk = {
+                        "model": kwargs.get("model", "").split("/")[-1],
+                        "created_at": datetime.now().isoformat(),
+                        "response": delta.content,
+                        "done": False
+                    }
+                    yield f"data: {json.dumps(ollama_chunk)}\n\n"
+        
+        # Send final chunk
+        final_chunk = {
+            "model": kwargs.get("model", "").split("/")[-1],
+            "created_at": datetime.now().isoformat(),
+            "response": "",
+            "done": True
+        }
+        yield f"data: {json.dumps(final_chunk)}\n\n"
+        
+    except Exception as e:
+        logger.error(f"Error in streaming: {str(e)}")
+        error_chunk = {
+            "error": str(e),
+            "done": True
+        }
+        yield f"data: {json.dumps(error_chunk)}\n\n"
+
+@app.post("/api/pull")
+async def pull_model(request: Request):
+    """Pull model endpoint (Ollama-compatible) - simulated for compatibility."""
+    try:
+        body = await request.json()
+        model_name = body.get("name", "")
+        
+        # Simulate pulling by validating the model exists
+        if model_name in MODEL_MAPPING or any(model_name in models for models in [
+            ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
+            ["gpt-4o", "gpt-4", "gpt-3.5-turbo"],
+            ["claude-3-5-sonnet", "claude-3-haiku"]
+        ]):
+            return {
+                "status": "success",
+                "message": f"Model {model_name} is available"
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Model {model_name} not found")
+            
+    except Exception as e:
+        logger.error(f"Error pulling model: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Pull model error: {str(e)}")
+
+@app.delete("/api/delete")
+async def delete_model(request: Request):
+    """Delete model endpoint (Ollama-compatible) - simulated for compatibility."""
+    try:
+        body = await request.json()
+        model_name = body.get("name", "")
+        
+        # Simulate deletion (no-op for cloud models)
+        return {
+            "status": "success",
+            "message": f"Model {model_name} deletion simulated (cloud models cannot be deleted)"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error deleting model: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Delete model error: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PROXY_PORT, log_level="info")
+    uvicorn.run(
+        "ollama_proxy:app",
+        host=PROXY_HOST,
+        port=PROXY_PORT,
+        reload=False,
+        log_level="info"
+    )

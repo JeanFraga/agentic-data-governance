@@ -1,0 +1,125 @@
+# Production deployment values for GKE
+# This file contains settings optimized for GKE Autopilot production deployment
+
+# Global settings
+replicaCount: 1
+releaseName: "webui-adk-prod"
+
+# Persistence Configuration
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+
+# Open WebUI Frontend Configuration
+openWebUI:
+  image:
+    repository: ghcr.io/open-webui/open-webui
+    tag: main
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+  # Resource configuration for GKE
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "300m"
+    limits:
+      memory: "3Gi"
+      cpu: "1000m"
+  # OIDC/SSO Configuration
+  sso:
+    enabled: true
+    clientId: "${OAUTH_CLIENT_ID}"
+    clientSecret: "${OAUTH_CLIENT_SECRET}"
+    providerUrl: "https://accounts.google.com/.well-known/openid-configuration"
+    providerName: "Google"
+    scopes: "openid email profile"
+  # Auto-create admin account configuration
+  admin:
+    email: "${ADMIN_EMAIL}"
+    password: "${ADMIN_PASSWORD}"
+    autoCreate: true
+  # Authentication settings
+  auth:
+    disableSignup: false
+    enableOAuth: true
+    enablePasswordLogin: true
+    requireEmailVerification: false
+
+# ADK Backend Configuration
+adkBackend:
+  image:
+    repository: "us-central1-docker.pkg.dev/your-gcp-project-id/webui-adk-repo/adk-backend"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  port: ${ADK_BACKEND_PORT}
+  # Resource configuration for GKE
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "3Gi"
+      cpu: "1500m"
+  gcp:
+    projectId: "${GCP_PROJECT_ID}"
+    # No credentials path for GKE - using default service account
+    credentialsPath: ""
+  env:
+    GOOGLE_GENAI_USE_VERTEXAI: "TRUE"
+    ADK_LOCAL_MODE: "FALSE"
+
+# Ollama Proxy Configuration
+ollamaProxy:
+  image:
+    repository: "us-central1-docker.pkg.dev/your-gcp-project-id/webui-adk-repo/ollama-proxy"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  port: ${OLLAMA_PROXY_PORT}
+  logLevel: "INFO"
+  # Resource configuration for GKE
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+# Ingress Configuration - enabled for production
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "${APP_HOST}"
+  annotations:
+    # Required for large file uploads through Open WebUI RAG
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    # Increases timeouts for long-running LLM requests
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    # Enable automatic TLS certificate generation (when TLS is enabled)
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  tls:
+    enabled: ${ENABLE_TLS}
+    # This secret will be automatically created by cert-manager
+    secretName: "${APP_HOST}-tls-secret"
+
+# Production settings
+local:
+  exposeServices: false
+  hostNetwork: false
+
+# OAuth configuration (passed via environment substitution)
+oauth:
+  clientId: "${OAUTH_CLIENT_ID}"
+  clientSecret: "${OAUTH_CLIENT_SECRET}"
+
+# Admin configuration
+admin:
+  email: "${ADMIN_EMAIL}"
+  password: "${ADMIN_PASSWORD}"

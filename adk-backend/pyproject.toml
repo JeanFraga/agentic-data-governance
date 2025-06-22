@@ -2,7 +2,7 @@
 name = "data-science-agent"
 version = "0.1.0"
 description = "Data Science, Data QnA and Data Documentation Agent for Google ADK"
-authors = ["Jean Fraga <fragajean7@gmail.com>"]
+authors = ["Your Name <your-email@example.com>"]
 license = "Apache License 2.0"
 readme = "README.md"
 package-mode = true
@@ -12,6 +12,8 @@ package-mode = true
 python = "^3.12"
 python-dotenv = "^1.0.1"
 google-adk = "^1.0.0"
+litellm = "^1.0.0"
+aiohttp = "^3.8.0"
 immutabledict = "^4.2.1"
 sqlglot = "^26.10.1"
 db-dtypes = "^1.4.2"

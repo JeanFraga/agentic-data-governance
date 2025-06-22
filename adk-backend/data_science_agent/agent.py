@@ -24,6 +24,13 @@ from google.adk.agents import Agent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.tools import load_artifacts
 
+# Try to import LiteLLM model support for ADK
+try:
+    from google.adk.models.lite_llm import LiteLlm
+    HAS_LITELLM = True
+except ImportError:
+    HAS_LITELLM = False
+
 from .sub_agents import bqml_agent
 from .sub_agents.bigquery.tools import (
     get_database_settings as get_bq_database_settings,
@@ -60,7 +67,7 @@ def setup_before_agent_call(callback_context: CallbackContext):
 
 
 root_agent = Agent(
-    model=os.getenv("ROOT_AGENT_MODEL"),
+    model=LiteLlm(model=os.getenv("ROOT_AGENT_MODEL", "gemini-1.5-pro")) if HAS_LITELLM else os.getenv("ROOT_AGENT_MODEL"),
     name="db_ds_multiagent",
     instruction=return_instructions_root(),
     global_instruction=(

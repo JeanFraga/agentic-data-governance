@@ -1,0 +1,119 @@
+# Low-resource deployment values for webui-adk-chart
+# This file contains settings optimized for minimal resource usage
+# Use this while waiting for CPU quota increase
+
+# Global settings
+replicaCount: 1
+releaseName: "webui-adk-local"
+
+# Persistence Configuration
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 5Gi
+
+# Open WebUI Frontend Configuration with lower resource requests
+openWebUI:
+  image:
+    repository: ghcr.io/open-webui/open-webui
+    tag: main
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    port: 80
+    targetPort: 8080
+    nodePort: ${SERVICE_NODE_PORT}
+  # Resource limits to prevent excessive CPU usage
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "200m"
+    limits:
+      memory: "2.5Gi"
+      cpu: "500m"
+  # OIDC/SSO Configuration
+  sso:
+    enabled: true
+    clientId: "${OAUTH_CLIENT_ID}"
+    clientSecret: "${OAUTH_CLIENT_SECRET}"
+    providerUrl: "https://accounts.google.com/.well-known/openid-configuration"
+    providerName: "Google"
+    scopes: "openid email profile"
+  # Auto-create admin account configuration
+  admin:
+    email: "${ADMIN_EMAIL}"
+    password: "${ADMIN_PASSWORD}"
+    autoCreate: true
+  # Authentication settings
+  auth:
+    disableSignup: false
+    enableOAuth: true
+    enablePasswordLogin: true
+    requireEmailVerification: false
+
+# ADK Backend Configuration with lower resource requests
+adkBackend:
+  image:
+    repository: "us-central1-docker.pkg.dev/your-gcp-project-id/webui-adk-repo/adk-backend"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  port: ${ADK_BACKEND_PORT}
+  # Resource limits for ADK backend
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "300m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  gcp:
+    projectId: "${GCP_PROJECT_ID}"
+    credentialsPath: "${GCLOUD_CREDENTIALS_PATH}"
+  env:
+    GOOGLE_GENAI_USE_VERTEXAI: "TRUE"
+    ADK_LOCAL_MODE: "FALSE"
+
+# Ollama Proxy Configuration with minimal resources
+ollamaProxy:
+  image:
+    repository: "us-central1-docker.pkg.dev/your-gcp-project-id/webui-adk-repo/ollama-proxy"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  port: ${OLLAMA_PROXY_PORT}
+  logLevel: "INFO"
+  # Very conservative resource requests
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "300m"
+
+# Ingress Configuration - disabled for quota conservation
+ingress:
+  enabled: false
+  className: ""
+  host: "localhost"
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""
+
+# Local development specific settings
+local:
+  exposeServices: true
+  hostNetwork: false
+
+# Node affinity to try to fit on existing node
+nodeAffinity:
+  enabled: true
+  # Prefer scheduling on existing nodes
+  preferredDuringSchedulingIgnoredDuringExecution:
+  - weight: 100
+    preference:
+      matchExpressions:
+      - key: cloud.google.com/gke-nodepool
+        operator: Exists

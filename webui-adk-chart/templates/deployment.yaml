@@ -14,6 +14,9 @@ spec:
       labels:
         app: {{.Values.releaseName }}
     spec:
+      {{- if .Values.workloadIdentity.enabled }}
+      serviceAccountName: adk-backend-sa
+      {{- end }}
       volumes:
         - name: open-webui-data
           {{- if .Values.persistence.enabled }}
@@ -38,7 +41,8 @@ spec:
           env:
             - name: OLLAMA_BASE_URLS
               value: "http://localhost:{{.Values.ollamaProxy.port }}"
-            {{- if.Values.openWebUI.sso.enabled }}
+            {{- if .Values.openWebUI.sso.enabled }}
+            # OAuth/SSO Configuration
             - name: ENABLE_OAUTH_SIGNUP
               value: "True"
             - name: OAUTH_PROVIDER_NAME
@@ -58,9 +62,39 @@ spec:
                   name: {{.Values.releaseName }}-oidc-secret
                   key: OAUTH_CLIENT_SECRET
             {{- end }}
+            {{- if .Values.openWebUI.admin.autoCreate }}
+            # Auto-create admin account
+            - name: DEFAULT_USER_ROLE
+              value: "admin"
+            - name: DEFAULT_ADMIN_EMAIL
+              value: {{.Values.openWebUI.admin.email | quote }}
+            {{- if .Values.openWebUI.admin.password }}
+            - name: ADMIN_USER_EMAIL
+              value: {{.Values.openWebUI.admin.email | quote }}
+            - name: ADMIN_USER_PASSWORD
+              value: {{.Values.openWebUI.admin.password | quote }}
+            {{- end }}
+            {{- end }}
+            # Authentication settings
+            - name: ENABLE_SIGNUP
+              value: "True"
+            - name: ENABLE_LOGIN_FORM
+              value: "True"
+            - name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL
+              value: "True"
+            # Force authentication settings to override database
+            - name: WEBUI_AUTH
+              value: "True"
+            # Force signup to be enabled (override database settings)
+            - name: WEBUI_SIGNUP_ENABLED
+              value: "True"
           volumeMounts:
             - name: open-webui-data
               mountPath: /app/backend/data
+          {{- if .Values.openWebUI.resources }}
+          resources:
+            {{- toYaml .Values.openWebUI.resources | nindent 12 }}
+          {{- end }}
 
         # --- Google ADK Backend Container (Sidecar) ---
         - name: adk-backend
@@ -70,22 +104,20 @@ spec:
             - containerPort: {{.Values.adkBackend.port }}
           env:
             - name: GOOGLE_GENAI_USE_VERTEXAI
-              value: {{.Values.adkBackend.env.GOOGLE_GENAI_USE_VERTEXAI | default "TRUE" | quote }}
+              value: "TRUE"
             - name: GOOGLE_CLOUD_PROJECT
-              value: {{.Values.adkBackend.gcp.projectId | quote }}
-            {{- if .Values.adkBackend.gcp.credentialsPath }}
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: "/home/appuser/.config/gcloud/application_default_credentials.json"
-            {{- end }}
-            {{- if .Values.adkBackend.env.ADK_LOCAL_MODE }}
+              value: {{.Values.adkBackend.gcp.projectId | default "your-gcp-project-id" | quote }}
             - name: ADK_LOCAL_MODE
-              value: {{.Values.adkBackend.env.ADK_LOCAL_MODE | quote }}
-            {{- end }}
+              value: "FALSE"
           {{- if .Values.adkBackend.gcp.credentialsPath }}
           volumeMounts:
             - name: gcloud-credentials
               mountPath: /home/appuser/.config/gcloud
               readOnly: true
+          {{- end }}
+          {{- if .Values.adkBackend.resources }}
+          resources:
+            {{- toYaml .Values.adkBackend.resources | nindent 12 }}
           {{- end }}
 
         # --- Ollama Proxy Container (Translation Layer) ---
@@ -113,3 +145,7 @@ spec:
               port: {{.Values.ollamaProxy.port }}
             initialDelaySeconds: 5
             periodSeconds: 5
+          {{- if .Values.ollamaProxy.resources }}
+          resources:
+            {{- toYaml .Values.ollamaProxy.resources | nindent 12 }}
+          {{- end }}

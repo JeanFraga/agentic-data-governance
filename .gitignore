@@ -77,3 +77,15 @@ terraform.tfvars
 .gcloud/
 gcloud_credentials.json
 service-account-key.json
+
+# Additional sensitive files
+*.tfvars.backup*
+*.tfvars.*.backup
+.env.*
+!.env.example
+*secret*
+*credential*
+*password*
+*key*.json
+*key*.pem
+terraform/tfplan

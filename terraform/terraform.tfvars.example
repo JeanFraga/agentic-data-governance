@@ -3,9 +3,20 @@
 # DO NOT commit terraform.tfvars to Git (it's in .gitignore)
 
 gcp_project_id      = "your-gcp-project-id"  # Replace with your actual GCP project ID
-github_repo         = "JeanFraga/agentic-data-governance"
+github_repo         = "your-github-username/your-repo-name"
 app_host            = "webui.your-domain.com"  # Replace with your actual domain
 oauth_client_id     = "your-google-client-id.apps.googleusercontent.com"  # Replace with your OAuth Client ID
 oauth_client_secret = "your-google-client-secret"  # Replace with your OAuth Client Secret
+admin_password      = "your-secure-admin-password"  # Replace with your desired admin password
 adk_image_tag       = "latest"  # Or a specific tag you've built and pushed manually
 ollama_image_tag    = "latest"  # Or a specific tag you've built and pushed manually
+
+# DNS and Domain Configuration (Optional)
+domain_name         = "your-domain.com"  # Root domain (leave empty to skip DNS zone creation)
+create_dns_zone     = false  # Set to true to create Google Cloud DNS zone
+dns_zone_name       = "webui-dns-zone"  # Name for the DNS zone
+enable_https        = true   # Enable HTTPS with automatic certificates
+tls_email           = "admin@your-domain.com"  # Email for Let's Encrypt notifications
+
+# Infrastructure Control
+deploy_kubernetes_resources = true  # Set to false for infrastructure-only deployment
