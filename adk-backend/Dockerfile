@@ -29,7 +29,6 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy the application source code
 WORKDIR /home/appuser
 COPY --chown=appuser:appuser data_science_agent/ ./data_science_agent/
-COPY --chown=appuser:appuser main.py ./main.py
 COPY --chown=appuser:appuser entrypoint.py ./entrypoint.py
 COPY --chown=appuser:appuser .env ./.env
 

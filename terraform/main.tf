@@ -21,7 +21,8 @@ provider "google" {
 }
 
 locals {
-  adk_image_name = "adk-backend"
+  adk_image_name    = "adk-backend"
+  ollama_image_name = "ollama-proxy"
 }
 
 # --- 1. Provision Core GCP Infrastructure ---
@@ -170,10 +171,12 @@ resource "helm_release" "webui_adk_app" {
   
   values = [
     templatefile("${path.module}/../webui-adk-chart/values.yaml", {
-      image_repository = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${local.adk_image_name}"
-      image_tag        = var.adk_image_tag
-      app_host         = var.app_host
-      oauth_client_id  = var.oauth_client_id
+      adk_image_repository    = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${google_artifact_registry_repository.adk_repo.repository_id}/${local.adk_image_name}"
+      adk_image_tag          = var.adk_image_tag
+      ollama_image_repository = "${var.gcp_region}-docker.pkg.dev/${var.gcp_project_id}/${google_artifact_registry_repository.adk_repo.repository_id}/${local.ollama_image_name}"
+      ollama_image_tag       = var.ollama_image_tag
+      app_host               = var.app_host
+      oauth_client_id        = var.oauth_client_id
     })
   ]
 

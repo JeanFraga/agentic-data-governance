@@ -37,3 +37,9 @@ variable "adk_image_tag" {
   description = "The Docker image tag for the ADK backend, typically the Git SHA."
   default     = "latest"
 }
+
+variable "ollama_image_tag" {
+  type        = string
+  description = "The Docker image tag for the Ollama proxy, typically the Git SHA."
+  default     = "latest"
+}

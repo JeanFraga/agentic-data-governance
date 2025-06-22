@@ -8,3 +8,4 @@ app_host            = "webui.your-domain.com"  # Replace with your actual domain
 oauth_client_id     = "your-google-client-id.apps.googleusercontent.com"  # Replace with your OAuth Client ID
 oauth_client_secret = "your-google-client-secret"  # Replace with your OAuth Client Secret
 adk_image_tag       = "latest"  # Or a specific tag you've built and pushed manually
+ollama_image_tag    = "latest"  # Or a specific tag you've built and pushed manually

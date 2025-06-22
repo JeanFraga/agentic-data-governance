@@ -16,7 +16,7 @@ openWebUI:
   # OIDC/SSO Configuration for Google
   sso:
     enabled: true
-    clientId: "YOUR_CLIENT_ID_FROM_GOOGLE_CLOUD"
+    clientId: "${oauth_client_id}"
     clientSecret: "YOUR_CLIENT_SECRET_FROM_GOOGLE_CLOUD"
     providerUrl: "https://accounts.google.com/.well-known/openid-configuration"
     providerName: "Google"
@@ -25,8 +25,8 @@ openWebUI:
 # ADK Backend (Sidecar) Configuration
 adkBackend:
   image:
-    repository: "us-central1-docker.pkg.dev/your-gcp-project/adk-repo/adk-backend"
-    tag: "latest"
+    repository: "${adk_image_repository}"
+    tag: "${adk_image_tag}"
     pullPolicy: IfNotPresent
   port: 8000
   gcp:
@@ -36,7 +36,7 @@ adkBackend:
 ingress:
   enabled: true
   className: "nginx"
-  host: "webui.example.com"
+  host: "${app_host}"
   annotations:
     # Allows for large file uploads through Open WebUI RAG
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
@@ -47,3 +47,12 @@ ingress:
     enabled: true
     # This secret should be created in the cluster, e.g., by cert-manager
     secretName: "webui-tls-secret"
+
+# Ollama Proxy Configuration
+ollamaProxy:
+  image:
+    repository: "${ollama_image_repository}"
+    tag: "${ollama_image_tag}"
+    pullPolicy: IfNotPresent
+  port: 11434
+  logLevel: "INFO"

@@ -26,7 +26,7 @@ spec:
             - containerPort: {{.Values.openWebUI.service.targetPort }}
           env:
             - name: OLLAMA_BASE_URLS
-              value: "http://localhost:{{.Values.adkBackend.port }}/v1"
+              value: "http://localhost:{{.Values.ollamaProxy.port }}"
             {{- if.Values.openWebUI.sso.enabled }}
             - name: ENABLE_OAUTH_SIGNUP
               value: "True"
@@ -62,3 +62,29 @@ spec:
               value: "TRUE"
             - name: GOOGLE_CLOUD_PROJECT
               value: {{.Values.adkBackend.gcp.projectId | quote }}
+
+        # --- Ollama Proxy Container (Translation Layer) ---
+        - name: ollama-proxy
+          image: "{{.Values.ollamaProxy.image.repository }}:{{.Values.ollamaProxy.image.tag }}"
+          imagePullPolicy: {{.Values.ollamaProxy.image.pullPolicy }}
+          ports:
+            - containerPort: {{.Values.ollamaProxy.port }}
+          env:
+            - name: ADK_BACKEND_URL
+              value: "http://localhost:{{.Values.adkBackend.port }}"
+            - name: PROXY_PORT
+              value: "{{.Values.ollamaProxy.port }}"
+            - name: LOG_LEVEL
+              value: "{{.Values.ollamaProxy.logLevel }}"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{.Values.ollamaProxy.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{.Values.ollamaProxy.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5

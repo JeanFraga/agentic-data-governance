@@ -53,3 +53,13 @@ local:
   exposeServices: true
   # Use host networking for easier debugging
   hostNetwork: false
+
+# Ollama Proxy Configuration
+ollamaProxy:
+  image:
+    # Use the locally built Ollama proxy image
+    repository: "ollama-proxy"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  port: 11434
+  logLevel: "INFO"

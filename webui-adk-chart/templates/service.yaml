@@ -7,9 +7,17 @@ spec:
   selector:
     app: {{.Values.releaseName }}
   ports:
-    - protocol: TCP
+    - name: web
+      protocol: TCP
       port: {{.Values.openWebUI.service.port }}
       targetPort: {{.Values.openWebUI.service.targetPort }}
       {{- if and (eq .Values.openWebUI.service.type "NodePort") .Values.openWebUI.service.nodePort }}
       nodePort: {{.Values.openWebUI.service.nodePort }}
+      {{- end }}
+    - name: ollama-api
+      protocol: TCP
+      port: {{.Values.ollamaProxy.port }}
+      targetPort: {{.Values.ollamaProxy.port }}
+      {{- if eq .Values.openWebUI.service.type "NodePort" }}
+      nodePort: 30434
       {{- end }}
