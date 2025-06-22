@@ -2,6 +2,18 @@
 replicaCount: 1
 releaseName: "webui-adk"
 
+# Persistence Configuration
+persistence:
+  enabled: true
+  # Storage class to use for the persistent volume
+  # Use "" for default storage class, "-" for no storage class
+  storageClass: ""
+  # Access modes for the persistent volume
+  accessModes:
+    - ReadWriteOnce
+  # Size of the persistent volume
+  size: 10Gi
+
 # Open WebUI Frontend Configuration
 openWebUI:
   image:

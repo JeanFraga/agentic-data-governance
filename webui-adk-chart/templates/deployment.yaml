@@ -16,7 +16,12 @@ spec:
     spec:
       volumes:
         - name: open-webui-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.releaseName }}-data-pvc
+          {{- else }}
           emptyDir: {}
+          {{- end }}
         {{- if .Values.adkBackend.gcp.credentialsPath }}
         - name: gcloud-credentials
           hostPath:

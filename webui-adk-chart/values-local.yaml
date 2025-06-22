@@ -5,6 +5,16 @@
 replicaCount: 1
 releaseName: "webui-adk-local"
 
+# Persistence Configuration for local development
+persistence:
+  enabled: true
+  # Use default storage class for local development
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  # Smaller size for local development
+  size: 5Gi
+
 # Open WebUI Frontend Configuration
 openWebUI:
   image:
