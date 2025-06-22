@@ -62,23 +62,40 @@ class OllamaADKTranslator:
                     user_message = msg.get("content", "")
                     break
         
-        # ADK web interface format
+        # ADK web interface format for /run endpoint
+        # Correct message format: parts must contain objects with "text" field
         adk_request = {
-            "message": user_message,
-            "agent": "data_science_agent",
-            "session_id": "default_session"
+            "appName": "data_science_agent",
+            "userId": "openwebui_user",
+            "sessionId": "openwebui_session",
+            "newMessage": {
+                "role": "user",
+                "parts": [{"text": user_message}]
+            }
         }
         
         return adk_request
     
     def translate_adk_to_ollama(self, adk_response: Dict[str, Any], model: str) -> Dict[str, Any]:
         """Convert ADK response to Ollama chat completion format"""
-        content = (
-            adk_response.get("response") or 
-            adk_response.get("message") or 
-            adk_response.get("content") or
-            str(adk_response)
-        )
+        content = ""
+        
+        # ADK returns a list of events, find the one with content
+        if isinstance(adk_response, list):
+            for event in adk_response:
+                if isinstance(event, dict) and event.get("content"):
+                    content_obj = event["content"]
+                    if isinstance(content_obj, dict) and content_obj.get("parts"):
+                        parts = content_obj["parts"]
+                        if isinstance(parts, list) and len(parts) > 0:
+                            first_part = parts[0]
+                            if isinstance(first_part, dict) and first_part.get("text"):
+                                content = first_part["text"]
+                                break
+        
+        # Fallback to string representation if no content found
+        if not content:
+            content = str(adk_response)
         
         current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         
@@ -96,22 +113,39 @@ class OllamaADKTranslator:
         """Forward request to ADK backend and get response"""
         session = await self.get_session()
         
-        endpoints_to_try = ["/api/chat", "/chat", "/api/agent/chat"]
-        
-        for endpoint in endpoints_to_try:
+        try:
+            # First ensure session exists
+            session_url = f"{self.adk_url}/apps/{adk_request['appName']}/users/{adk_request['userId']}/sessions"
             try:
                 async with session.post(
-                    f"{self.adk_url}{endpoint}",
-                    json=adk_request,
-                    headers={"Content-Type": "application/json"},
-                    timeout=30
+                    session_url,
+                    json={"appName": adk_request['appName'], "userId": adk_request['userId']},
+                    timeout=10
                 ) as response:
                     if response.status == 200:
-                        return await response.json()
-            except aiohttp.ClientError:
-                continue
-        
-        raise HTTPException(status_code=503, detail="ADK backend unavailable")
+                        session_data = await response.json()
+                        actual_session_id = session_data.get('id', adk_request['sessionId'])
+                        adk_request['sessionId'] = actual_session_id
+            except:
+                pass  # Session might already exist, continue with original session_id
+            
+            # Send message using /run endpoint
+            async with session.post(
+                f"{self.adk_url}/run",
+                json=adk_request,
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            ) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    error_text = await response.text()
+                    logger.error(f"ADK backend error {response.status}: {error_text}")
+                    raise HTTPException(status_code=503, detail=f"ADK backend error: {error_text}")
+                    
+        except aiohttp.ClientError as e:
+            logger.error(f"Connection error to ADK backend: {e}")
+            raise HTTPException(status_code=503, detail="ADK backend unavailable")
 
 # Initialize translator
 translator = OllamaADKTranslator(ADK_BACKEND_URL)
@@ -130,7 +164,8 @@ async def get_models():
     return {
         "models": [
             {
-                "name": "adk-agent:latest",
+                "model": "adk-agent:latest",  # Changed from "name" to "model"
+                "name": "adk-agent:latest",   # Keep "name" for compatibility
                 "modified_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                 "size": 3826793677,
                 "digest": "sha256:bc07c81de745696fdf5afca05e065818a8149fb0c77266fb584d9b2cba3711ab"

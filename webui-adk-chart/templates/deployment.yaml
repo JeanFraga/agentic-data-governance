@@ -17,6 +17,12 @@ spec:
       volumes:
         - name: open-webui-data
           emptyDir: {}
+        {{- if .Values.adkBackend.gcp.credentialsPath }}
+        - name: gcloud-credentials
+          hostPath:
+            path: {{.Values.adkBackend.gcp.credentialsPath }}
+            type: Directory
+        {{- end }}
       containers:
         # --- Open Web UI Frontend Container ---
         - name: open-webui
@@ -59,9 +65,23 @@ spec:
             - containerPort: {{.Values.adkBackend.port }}
           env:
             - name: GOOGLE_GENAI_USE_VERTEXAI
-              value: "TRUE"
+              value: {{.Values.adkBackend.env.GOOGLE_GENAI_USE_VERTEXAI | default "TRUE" | quote }}
             - name: GOOGLE_CLOUD_PROJECT
               value: {{.Values.adkBackend.gcp.projectId | quote }}
+            {{- if .Values.adkBackend.gcp.credentialsPath }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/home/appuser/.config/gcloud/application_default_credentials.json"
+            {{- end }}
+            {{- if .Values.adkBackend.env.ADK_LOCAL_MODE }}
+            - name: ADK_LOCAL_MODE
+              value: {{.Values.adkBackend.env.ADK_LOCAL_MODE | quote }}
+            {{- end }}
+          {{- if .Values.adkBackend.gcp.credentialsPath }}
+          volumeMounts:
+            - name: gcloud-credentials
+              mountPath: /home/appuser/.config/gcloud
+              readOnly: true
+          {{- end }}
 
         # --- Ollama Proxy Container (Translation Layer) ---
         - name: ollama-proxy

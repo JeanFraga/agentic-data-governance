@@ -35,7 +35,14 @@ adkBackend:
     pullPolicy: IfNotPresent
   port: 8000
   gcp:
-    projectId: "local-development"
+    projectId: "agenticds-hackathon-54443"
+    # Mount local gcloud credentials for authentication
+    credentialsPath: "/Users/jeanfraga/.config/gcloud"
+  env:
+    # Enable Vertex AI for local testing with credentials
+    GOOGLE_GENAI_USE_VERTEXAI: "TRUE"
+    # Disable local mode since we have credentials
+    ADK_LOCAL_MODE: "FALSE"
 
 # Ingress Configuration - disabled for local development
 ingress:

@@ -34,6 +34,7 @@ if __name__ == "__main__":
     import subprocess
     
     # Run adk web with the specified arguments
-    cmd = ["adk", "web", "--host", "0.0.0.0", "--port", "8000"]
-    print(f"Starting ADK web server: {' '.join(cmd)}")
+    # cmd = ["adk", "web", "--host", "0.0.0.0", "--port", "8000"]
+    cmd = ["adk", "api_server", "--host", "0.0.0.0", "--port", "8000"]
+    print(f"Starting ADK API server: {' '.join(cmd)}")
     subprocess.run(cmd)
