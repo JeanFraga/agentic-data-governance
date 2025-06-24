@@ -44,15 +44,34 @@ variable "ollama_image_tag" {
   default     = "latest"
 }
 
+variable "admin_email" {
+  type        = string
+  description = "The default admin email for OpenWebUI."
+  default     = "admin@example.com"
+}
+
 variable "admin_password" {
   type        = string
   description = "The default admin password for OpenWebUI."
   sensitive   = true
+  default     = "admin123"
+}
+
+variable "replica_count" {
+  type        = number
+  description = "Number of replicas for the application deployment."
+  default     = 1
 }
 
 variable "deploy_kubernetes_resources" {
   type        = bool
-  description = "Whether to deploy Kubernetes resources (Helm charts)"
+  description = "Whether to deploy the Kubernetes application resources."
+  default     = true
+}
+
+variable "deploy_cert_manager" {
+  type        = bool
+  description = "Whether to deploy cert-manager."
   default     = true
 }
 

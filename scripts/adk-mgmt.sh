@@ -39,6 +39,8 @@ show_script_help() {
     echo "    deploy production      Deploy to GKE production"
     echo "    deploy quick           Quick deployment with auto-setup"
     echo "    deploy quota-limited   Deploy with minimal resources"
+    echo "    destroy local          Destroy local deployment"
+    echo "    destroy production     Destroy production deployment"
     echo ""
     echo "  🧪 Testing & Validation:"
     echo "    test all               Run all tests"
@@ -337,41 +339,52 @@ cmd_deploy() {
 }
 
 deploy_local() {
-    print_step "Deploying to local/development environment"
+    print_step "Deploying to local/development environment using Terraform"
     
-    check_prerequisites "helm" "kubectl"
-    check_kubernetes
-    env_check
+    check_prerequisites "terraform" "kubectl" "helm"
     
-    # Load environment variables
-    load_env ".env"
+    # Ensure we're using local Docker Desktop context
+    print_step "Checking Kubernetes context..."
+    local current_context=$(kubectl config current-context)
+    if [ "$current_context" != "docker-desktop" ]; then
+        print_warning "Current context is '$current_context'. Switching to 'docker-desktop'..."
+        kubectl config use-context docker-desktop
+    fi
     
-    # Create namespace if it doesn't exist
-    check_namespace "$NAMESPACE"
-    
-    # Deploy with Helm
-    print_step "Deploying with Helm..."
-    
-    local values_path="$DEFAULT_CHART_DIR/$VALUES_FILE"
-    if [ ! -f "$values_path" ]; then
-        print_error "Values file not found: $values_path"
+    # Navigate to terraform-local directory
+    local terraform_local_dir="$(dirname "$SCRIPT_DIR")/terraform-local"
+    if [ ! -d "$terraform_local_dir" ]; then
+        print_error "Local Terraform directory not found: $terraform_local_dir"
         exit 1
     fi
     
-    # Use envsubst to replace environment variables in values file
-    local temp_values="/tmp/adk-values.yaml"
-    envsubst < "$values_path" > "$temp_values"
+    cd "$terraform_local_dir"
     
-    helm upgrade --install "$RELEASE_NAME" "$DEFAULT_CHART_DIR" \
-        -f "$temp_values" \
-        -n "$NAMESPACE" \
-        --create-namespace \
-        --wait
+    print_step "Initializing Terraform for local deployment..."
+    terraform init
     
-    rm -f "$temp_values"
+    print_step "Planning local deployment..."
+    terraform plan
     
-    print_success "Deployment completed successfully"
-    show_connection_info
+    print_step "Applying local deployment..."
+    terraform apply -auto-approve
+    
+    print_success "Local deployment completed successfully"
+    
+    # Show connection information
+    echo ""
+    print_header "Connection Information"
+    echo "Namespace: adk-local"
+    echo "Release:   adk-local"
+    echo "Context:   docker-desktop"
+    echo ""
+    echo "To access the application:"
+    echo "  kubectl port-forward -n adk-local svc/adk-local 8080:80"
+    echo "  Then open: http://localhost:8080"
+    echo ""
+    echo "To check status:"
+    echo "  kubectl get pods -n adk-local"
+    echo "  helm list -n adk-local"
 }
 
 deploy_production() {
@@ -457,6 +470,77 @@ deploy_quota_limited() {
     
     print_success "Quota-limited deployment completed"
     show_connection_info
+}
+
+# Destroy functions
+cmd_destroy() {
+    case "$SUBCOMMAND" in
+        local)
+            destroy_local
+            ;;
+        production)
+            destroy_production
+            ;;
+        *)
+            print_error "Unknown destroy command: $SUBCOMMAND"
+            echo "Available: local, production"
+            exit 1
+            ;;
+    esac
+}
+
+destroy_local() {
+    print_step "Destroying local deployment"
+    
+    check_prerequisites "terraform" "kubectl"
+    
+    # Ensure we're using local Docker Desktop context
+    local current_context=$(kubectl config current-context)
+    if [ "$current_context" != "docker-desktop" ]; then
+        print_warning "Current context is '$current_context'. Switching to 'docker-desktop'..."
+        kubectl config use-context docker-desktop
+    fi
+    
+    # Navigate to terraform-local directory
+    local terraform_local_dir="$(dirname "$SCRIPT_DIR")/terraform-local"
+    if [ ! -d "$terraform_local_dir" ]; then
+        print_error "Local Terraform directory not found: $terraform_local_dir"
+        exit 1
+    fi
+    
+    cd "$terraform_local_dir"
+    
+    print_step "Destroying local Terraform deployment..."
+    terraform destroy -auto-approve
+    
+    print_success "Local deployment destroyed successfully"
+}
+
+destroy_production() {
+    print_step "Destroying production deployment"
+    print_warning "This will destroy ALL production resources including the GKE cluster!"
+    
+    read -p "Are you absolutely sure? Type 'destroy-production' to confirm: " confirmation
+    if [ "$confirmation" != "destroy-production" ]; then
+        print_error "Confirmation failed. Aborting."
+        exit 1
+    fi
+    
+    check_prerequisites "terraform" "gcloud"
+    
+    # Navigate to terraform directory
+    local terraform_dir="$(dirname "$SCRIPT_DIR")/terraform"
+    if [ ! -d "$terraform_dir" ]; then
+        print_error "Terraform directory not found: $terraform_dir"
+        exit 1
+    fi
+    
+    cd "$terraform_dir"
+    
+    print_step "Destroying production Terraform deployment..."
+    terraform destroy
+    
+    print_success "Production deployment destroyed"
 }
 
 # Testing functions
@@ -1070,6 +1154,9 @@ main() {
             ;;
         deploy)
             cmd_deploy
+            ;;
+        destroy)
+            cmd_destroy
             ;;
         test)
             cmd_test

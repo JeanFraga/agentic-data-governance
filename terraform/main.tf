@@ -209,7 +209,7 @@ resource "helm_release" "ingress_nginx" {
 }
 
 resource "helm_release" "cert_manager" {
-  count      = var.deploy_kubernetes_resources ? 1 : 0
+  count      = var.deploy_cert_manager && var.deploy_kubernetes_resources ? 1 : 0
   name       = "cert-manager"
   repository = "https://charts.jetstack.io"
   chart      = "cert-manager"
@@ -224,7 +224,7 @@ resource "helm_release" "cert_manager" {
 
 # Wait for cert-manager to be ready and create ClusterIssuer
 resource "null_resource" "wait_for_cert_manager" {
-  count = var.deploy_kubernetes_resources ? 1 : 0
+  count = var.deploy_cert_manager && var.deploy_kubernetes_resources ? 1 : 0
   depends_on = [helm_release.cert_manager]
   
   provisioner "local-exec" {
@@ -282,7 +282,7 @@ resource "google_service_account_iam_member" "adk_workload_identity" {
 
 resource "helm_release" "webui_adk_app" {
   count      = var.deploy_kubernetes_resources ? 1 : 0
-  name       = "webui-adk-prod"
+  name       = "webui-adk-terraform"
   chart      = "../webui-adk-chart"
   namespace  = "default"
   
@@ -294,11 +294,13 @@ resource "helm_release" "webui_adk_app" {
       ollama_image_tag       = var.ollama_image_tag
       app_host               = var.app_host
       oauth_client_id        = var.oauth_client_id
+      admin_email            = var.admin_email
       admin_password         = var.admin_password
       enable_ingress         = var.app_host != "webui.example.com" && var.app_host != ""
       enable_tls             = var.enable_https
       tls_email              = var.tls_email
       gcp_project_id         = var.gcp_project_id
+      replica_count          = var.replica_count
     })
   ]
 
@@ -307,8 +309,12 @@ resource "helm_release" "webui_adk_app" {
     value = var.oauth_client_secret
   }]
 
-  # Use specific image versions to fix current deployment
+  # Override replica count for local development
   set = [
+    {
+      name  = "replicaCount"
+      value = var.replica_count
+    },
     {
       name  = "ollamaProxy.image.tag"
       value = "v2.0.0"
@@ -325,7 +331,6 @@ resource "helm_release" "webui_adk_app" {
 
   depends_on = [
     helm_release.ingress_nginx,
-    null_resource.wait_for_cert_manager,
     google_service_account.adk_workload_sa,
     google_project_iam_member.adk_vertex_user,
     google_project_iam_member.adk_vertex_admin
