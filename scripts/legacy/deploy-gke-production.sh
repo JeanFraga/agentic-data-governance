@@ -35,7 +35,7 @@ export ENABLE_TLS="${ENABLE_TLS:-true}"
 
 # Validate required environment variables
 echo -e "${GREEN}🔍 Validating environment variables...${NC}"
-./check-env-simple.sh
+"$(dirname "$0")/check-env-simple.sh"
 
 echo -e "${GREEN}📝 Using GKE production values file...${NC}"
 

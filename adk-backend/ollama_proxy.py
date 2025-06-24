@@ -35,13 +35,21 @@ def setup_provider_environment():
     
     if provider in ["vertex_ai", "google_vertex_ai"]:
         # Vertex AI setup
-        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-            logger.warning("GOOGLE_APPLICATION_CREDENTIALS not set for Vertex AI")
+        adc_path = os.path.expanduser("~/.config/gcloud/application_default_credentials.json")
+        if os.path.exists(adc_path) and not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = adc_path
+            logger.info(f"Set GOOGLE_APPLICATION_CREDENTIALS to {adc_path}")
+        
         project_id = os.getenv("VERTEX_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
         if project_id:
             os.environ["VERTEX_PROJECT"] = project_id
-        location = os.getenv("VERTEX_LOCATION", "us-central1")
+            logger.info(f"Set VERTEX_PROJECT to {project_id}")
+        else:
+            logger.warning("VERTEX_PROJECT_ID not set for Vertex AI")
+            
+        location = os.getenv("VERTEX_LOCATION") or os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
         os.environ["VERTEX_LOCATION"] = location
+        logger.info(f"Set VERTEX_LOCATION to {location}")
         
     elif provider in ["google_ai_studio", "gemini"]:
         # Google AI Studio setup
@@ -77,8 +85,9 @@ MODEL_MAPPING = {
     "gemini-pro": "gemini/gemini-pro",
     "gemini-pro-vision": "gemini/gemini-pro-vision",
     
-    # Vertex AI models
-    "gemini-2.0-flash-vertex": "vertex_ai/gemini-2.0-flash",
+    # Vertex AI models (matching ADK configuration)
+    "gemini-2.0-flash-001": "vertex_ai/gemini-2.0-flash-001",
+    "gemini-2.0-flash-vertex": "vertex_ai/gemini-2.0-flash-001", 
     "gemini-1.5-flash-vertex": "vertex_ai/gemini-1.5-flash",
     "gemini-1.5-pro-vertex": "vertex_ai/gemini-1.5-pro",
     "gemini-pro-vertex": "vertex_ai/gemini-pro",
@@ -104,8 +113,8 @@ MODEL_MAPPING = {
 DEFAULT_MODELS = {
     "google_ai_studio": "gemini-2.0-flash",
     "gemini": "gemini-2.0-flash",
-    "vertex_ai": "gemini-2.0-flash-vertex",
-    "google_vertex_ai": "gemini-2.0-flash-vertex",
+    "vertex_ai": "gemini-2.0-flash-001",  # Updated to match ADK config
+    "google_vertex_ai": "gemini-2.0-flash-001",  # Updated to match ADK config
     "openai": "gpt-4o",
     "anthropic": "claude-3-5-sonnet",
 }
@@ -129,8 +138,11 @@ def map_model_name(ollama_model: str) -> str:
         return f"gemini/{ollama_model}"
     elif provider in ["vertex_ai", "google_vertex_ai"]:
         if "gemini" not in ollama_model:
-            return f"vertex_ai/{get_default_model().replace('-vertex', '')}"
-        return f"vertex_ai/{ollama_model.replace('-vertex', '')}"
+            return f"vertex_ai/{get_default_model()}"
+        # Handle specific ADK model names
+        if ollama_model == "gemini-2.0-flash-001":
+            return "vertex_ai/gemini-2.0-flash-001"
+        return f"vertex_ai/{ollama_model}"
     elif provider == "openai":
         if "gpt" not in ollama_model.lower() and "o1" not in ollama_model.lower():
             return f"openai/{get_default_model()}"
@@ -214,7 +226,7 @@ async def get_models():
             models = ["gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash", 
                      "gemini-1.5-flash-8b", "gemini-1.5-pro", "gemini-pro"]
         elif provider in ["vertex_ai", "google_vertex_ai"]:
-            models = ["gemini-2.0-flash-vertex", "gemini-1.5-flash-vertex", 
+            models = ["gemini-2.0-flash-001", "gemini-2.0-flash-vertex", "gemini-1.5-flash-vertex", 
                      "gemini-1.5-pro-vertex", "gemini-pro-vertex"]
         elif provider == "openai":
             models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo", "o1", "o1-mini"]

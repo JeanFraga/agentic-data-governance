@@ -19,7 +19,7 @@ services:
       # - BQ_PROJECT_ID=your-project-id
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/list-apps"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -27,9 +27,82 @@ services:
     networks:
       - adk-network
 
+  adk-openai-adapter:
+    build:
+      context: .
+      dockerfile: Dockerfile.adapter
+    container_name: adk-openai-adapter
+    ports:
+      - "8080:8080"
+    environment:
+      - ADK_API_BASE=http://adk-backend:8000
+      - ADK_APP_NAME=data_science_agent
+      - ADK_USER_ID=openai_user
+      - PORT=8080
+      - HOST=0.0.0.0
+    depends_on:
+      adk-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - adk-network
+
+  litellm-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.litellm
+    container_name: litellm-proxy
+    ports:
+      - "4000:4000"
+    environment:
+      - LITELLM_MASTER_KEY=litellm-master-key-2024
+      - LITELLM_LOG=DEBUG
+    depends_on:
+      adk-openai-adapter:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - adk-network
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://litellm-proxy:4000/v1
+      - OPENAI_API_KEY=litellm-master-key-2024
+      - WEBUI_SECRET_KEY=your-secret-key-here
+      - ENABLE_SIGNUP=false
+      - DEFAULT_USER_ROLE=admin
+    volumes:
+      - open-webui-data:/app/backend/data
+    depends_on:
+      litellm-proxy:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - adk-network
+
 networks:
   adk-network:
     driver: bridge
+
+volumes:
+  open-webui-data:
+    driver: local
 
 # Optional: Add volumes for persistent data if needed
 # volumes:

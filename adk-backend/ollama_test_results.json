@@ -1,0 +1,86 @@
+{
+  "summary": {
+    "total_tests": 7,
+    "successful_tests": 4,
+    "success_rate": 57.14285714285714,
+    "overall_success": false
+  },
+  "test_results": [
+    {
+      "test": "ollama_health",
+      "result": {
+        "success": true,
+        "provider": "google_ai_studio",
+        "default_model": "gemini-2.0-flash",
+        "host": "http://localhost:11434"
+      }
+    },
+    {
+      "test": "available_models",
+      "result": {
+        "success": true,
+        "total_models": 6,
+        "model_names": [
+          "gemini-2.0-flash",
+          "gemini-2.0-flash-exp",
+          "gemini-1.5-flash",
+          "gemini-1.5-flash-8b",
+          "gemini-1.5-pro",
+          "gemini-pro"
+        ],
+        "data_science_models": [],
+        "recommended_model": "gemini-2.0-flash"
+      }
+    },
+    {
+      "test": "agent_creation",
+      "result": {
+        "success": true,
+        "agent_name": "ollama_data_science_agent",
+        "model_name": "gemini-2.0-flash",
+        "agent_type": "LlmAgent"
+      }
+    },
+    {
+      "test": "simple_query",
+      "result": {
+        "success": false,
+        "error": "No response received"
+      }
+    },
+    {
+      "test": "data_science_query",
+      "result": {
+        "success": false,
+        "error": "No response received"
+      }
+    },
+    {
+      "test": "callback_handler",
+      "result": {
+        "success": false,
+        "error": "No response received"
+      }
+    },
+    {
+      "test": "performance",
+      "result": {
+        "success": true,
+        "total_queries": 5,
+        "successful_queries": 0,
+        "avg_response_time": 0.0007843971252441406,
+        "min_response_time": 0.0006020069122314453,
+        "max_response_time": 0.0009229183197021484,
+        "response_times": [
+          0.0008928775787353516,
+          0.0009229183197021484,
+          0.0007359981536865234,
+          0.0007681846618652344,
+          0.0006020069122314453
+        ],
+        "model_name": "gemini-2.0-flash"
+      }
+    }
+  ],
+  "timestamp": 1750641451.368778
+}

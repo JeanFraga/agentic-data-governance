@@ -12,6 +12,22 @@ The application consists of three main components:
 
 ## Quick Start
 
+### Script Runner
+
+For easy access to all deployment and management scripts:
+
+```bash
+# List all available scripts
+./run-script.sh
+
+# Run a specific script
+./run-script.sh check-env-simple
+./run-script.sh deploy-secure
+./run-script.sh test-domain-setup
+```
+
+📖 **Detailed Script Documentation**: See [`scripts/README.md`](./scripts/README.md) for comprehensive usage instructions and [`scripts/QUICK-REFERENCE.md`](./scripts/QUICK-REFERENCE.md) for a handy reference card.
+
 ### Local Development with Docker Compose
 
 For local development and testing:
@@ -45,6 +61,11 @@ For production deployment on GKE:
 │   ├── Dockerfile              # ADK backend container
 │   ├── Dockerfile.ollama-proxy # Ollama proxy container
 │   └── docker-compose.openwebui.yml
+├── scripts/                    # Utility scripts for deployment and testing
+│   ├── deploy-secure.sh        # Secure Helm deployment
+│   ├── setup-dns.sh           # DNS configuration
+│   ├── test-*.sh              # Testing and validation scripts
+│   └── README.md              # Scripts documentation
 ├── terraform/                  # Infrastructure as Code
 │   ├── main.tf                 # GKE cluster and resources
 │   ├── variables.tf            # Configuration variables

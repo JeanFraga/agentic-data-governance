@@ -1,0 +1,106 @@
+{
+  "total_tests": 8,
+  "successful_tests": 6,
+  "success_rate": 75.0,
+  "detailed_results": [
+    {
+      "test": "ollama_health",
+      "result": {
+        "success": true,
+        "provider": "vertex_ai",
+        "default_model": "gemini-2.0-flash-001",
+        "host": "http://localhost:11434"
+      }
+    },
+    {
+      "test": "adk_health",
+      "result": {
+        "success": true,
+        "available_apps": [
+          "data_science_agent",
+          "deployment",
+          "eval",
+          "tests"
+        ],
+        "has_data_science_agent": true,
+        "host": "http://localhost:8001"
+      }
+    },
+    {
+      "test": "ollama_models",
+      "result": {
+        "success": true,
+        "total_models": 5,
+        "model_names": [
+          "gemini-2.0-flash-001",
+          "gemini-2.0-flash-vertex",
+          "gemini-1.5-flash-vertex",
+          "gemini-1.5-pro-vertex",
+          "gemini-pro-vertex"
+        ],
+        "recommended_model": "gemini-2.0-flash-001"
+      }
+    },
+    {
+      "test": "create_session",
+      "result": {
+        "success": true,
+        "session_id": "ollama_test_38448575",
+        "session_data": {
+          "id": "05b1d11e-fdcc-4cce-ba3c-d4f0bffa7121",
+          "appName": "data_science_agent",
+          "userId": "ollama_test_user",
+          "state": {
+            "session_id": "ollama_test_38448575"
+          },
+          "events": [],
+          "lastUpdateTime": 1750697800.433541
+        }
+      }
+    },
+    {
+      "test": "configure_ollama",
+      "result": {
+        "success": true,
+        "note": "Ollama proxy ready - agent configuration via environment/config files",
+        "ollama_endpoint": "http://localhost:11434"
+      }
+    },
+    {
+      "test": "simple_query_adk",
+      "result": {
+        "success": false,
+        "error": "No events in ADK response",
+        "response_data": {
+          "id": "ollama_test_38448575",
+          "appName": "data_science_agent",
+          "userId": "ollama_test_user",
+          "state": {
+            "role": "user",
+            "content": "Hello! Can you tell me what 2 + 2 equals? Please give a brief answer."
+          },
+          "events": [],
+          "lastUpdateTime": 1750697800.434617
+        }
+      }
+    },
+    {
+      "test": "data_science_query_adk",
+      "result": {
+        "success": false,
+        "error": "No events in response"
+      }
+    },
+    {
+      "test": "direct_ollama_chat",
+      "result": {
+        "success": true,
+        "response_time": 1.3223090171813965,
+        "model": "gemini-2.0-flash-001",
+        "content_length": 273,
+        "response_preview": "Machine learning is a type of artificial intelligence that allows computer systems to learn from data without being explicitly programmed. It involves building algorithms that can identify patterns, m"
+      }
+    }
+  ],
+  "timestamp": 1750697801.75966
+}
