@@ -2,9 +2,26 @@
 
 This directory contains the unified management system for the Agentic Data Governance project. The individual scripts have been **consolidated into a single, powerful management tool** that automates deployment, configuration, testing, and troubleshooting tasks.
 
-## 🚀 **NEW: Unified Management System**
+## 🚀 **NEW: Cloud Build Integration**
 
-All functionality has been consolidated into **`adk-mgmt.sh`** - a comprehensive management script that replaces 21 individual scripts with a single, intuitive interface.
+The management system now uses **Google Cloud Build** by default for production deployments, providing:
+- ✅ **Faster builds** - No local Docker daemon required
+- 🔒 **Enhanced security** - Builds in Google's secure environment  
+- 📊 **Centralized logging** - Build logs in Google Cloud Console
+- 🌐 **Consistent environment** - Same build environment for all developers
+- 💾 **Resource efficient** - No local CPU/disk usage
+
+### Build Options
+```bash
+# Default: Cloud Build (recommended)
+./adk-mgmt.sh build images
+
+# Explicit Cloud Build
+./adk-mgmt.sh build cloudbuild  
+
+# Legacy local Docker (deprecated)
+./adk-mgmt.sh build legacy
+```
 
 ## 📋 Table of Contents
 
@@ -55,10 +72,20 @@ All functionality has been consolidated into **`adk-mgmt.sh`** - a comprehensive
 
 ### 🚀 Deployment
 ```bash
+# Image Building (Cloud Build)
+./adk-mgmt.sh build images           # Build using Cloud Build (default)
+./adk-mgmt.sh build cloudbuild       # Build using Cloud Build (explicit)
+./adk-mgmt.sh build legacy           # Build using local Docker (deprecated)
+
+# Environment Deployment
 ./adk-mgmt.sh deploy local           # Deploy to local/development
-./adk-mgmt.sh deploy production      # Deploy to GKE production
+./adk-mgmt.sh deploy production      # Deploy to GKE production (includes Cloud Build)
 ./adk-mgmt.sh deploy quick           # Quick deployment with auto-setup
 ./adk-mgmt.sh deploy quota-limited   # Deploy with minimal resources
+
+# Destruction
+./adk-mgmt.sh destroy local          # Destroy local deployment
+./adk-mgmt.sh destroy production     # Destroy production deployment
 ```
 
 ### 🧪 Testing & Validation

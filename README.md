@@ -41,16 +41,23 @@ This starts all services locally with health checks and automatic setup.
 
 ### Production Deployment on Kubernetes
 
-For production deployment on GKE:
+For production deployment using the unified Terraform workflow:
 
-1. **Configure GitHub Secrets** (see [KUBERNETES-DEPLOYMENT.md](./KUBERNETES-DEPLOYMENT.md))
-2. **Push to main branch** - GitHub Actions will automatically deploy
-3. **Configure DNS** - Point your domain to the ingress IP
+```bash
+# Use the unified management script
+./scripts/adk-mgmt.sh deploy production
+
+# Or preview first with dry-run
+./scripts/adk-mgmt.sh deploy production --dry-run
+```
+
+📖 **Complete Deployment Guide**: See [`UNIFIED-DEPLOYMENT-GUIDE.md`](./UNIFIED-DEPLOYMENT-GUIDE.md) for the comprehensive unified deployment workflow.
 
 ## Documentation
 
-- **[Local Development Guide](./adk-backend/README.ollama-setup.md)** - Docker Compose setup
-- **[Kubernetes Deployment Guide](./KUBERNETES-DEPLOYMENT.md)** - Production deployment
+- **[Unified Deployment Guide](./UNIFIED-DEPLOYMENT-GUIDE.md)** - **NEW**: Single workflow for local and production
+- **[Local Development Guide](./adk-backend/README.ollama-setup.md)** - Docker Compose setup  
+- **[Kubernetes Deployment Guide](./KUBERNETES-DEPLOYMENT.md)** - Legacy production deployment
 - **[Ollama Integration Summary](./adk-backend/OLLAMA-SETUP-SUMMARY.md)** - Architecture overview
 
 ## Project Structure
@@ -61,14 +68,17 @@ For production deployment on GKE:
 │   ├── Dockerfile              # ADK backend container
 │   ├── Dockerfile.ollama-proxy # Ollama proxy container
 │   └── docker-compose.openwebui.yml
-├── scripts/                    # Utility scripts for deployment and testing
-│   ├── deploy-secure.sh        # Secure Helm deployment
+├── scripts/                    # Deployment and management scripts
+│   ├── adk-mgmt.sh             # **NEW**: Unified management script  
+│   ├── deploy-secure.sh        # Legacy: Secure Helm deployment
 │   ├── setup-dns.sh           # DNS configuration
 │   ├── test-*.sh              # Testing and validation scripts
 │   └── README.md              # Scripts documentation
-├── terraform/                  # Infrastructure as Code
-│   ├── main.tf                 # GKE cluster and resources
-│   ├── variables.tf            # Configuration variables
+├── terraform/                  # **UNIFIED**: Infrastructure as Code
+│   ├── main.tf                 # Environment-aware GKE and local resources
+│   ├── variables.tf            # Merged configuration variables
+│   ├── terraform.tfvars.local # Local environment config
+│   ├── backend-*.tf.template   # Backend configuration templates
 │   └── terraform.tfvars.example
 ├── webui-adk-chart/            # Helm chart for Kubernetes
 │   ├── templates/              # Kubernetes manifests
@@ -94,8 +104,9 @@ For production deployment on GKE:
    ```
 
 2. **Choose your deployment method:**
+   - **Unified Workflow (Recommended)**: Follow [Unified Deployment Guide](./UNIFIED-DEPLOYMENT-GUIDE.md)
    - **Local Development**: Follow [Local Development Guide](./adk-backend/README.ollama-setup.md)
-   - **Production**: Follow [Kubernetes Deployment Guide](./KUBERNETES-DEPLOYMENT.md)
+   - **Legacy Production**: Follow [Kubernetes Deployment Guide](./KUBERNETES-DEPLOYMENT.md)
 
 ## Support
 

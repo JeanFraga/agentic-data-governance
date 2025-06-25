@@ -35,8 +35,11 @@ show_script_help() {
     echo "    oauth setup            Configure OAuth settings"
     echo ""
     echo "  🚀 Deployment:"
+    echo "    build [images]         Build production Docker images using Cloud Build"
+    echo "    build cloudbuild       Build using Google Cloud Build (explicit)"
+    echo "    build legacy           Build using local Docker (deprecated)"
     echo "    deploy local           Deploy to local/development environment"
-    echo "    deploy production      Deploy to GKE production"
+    echo "    deploy production      Deploy to GKE production (includes Cloud Build)"
     echo "    deploy quick           Quick deployment with auto-setup"
     echo "    deploy quota-limited   Deploy with minimal resources"
     echo "    destroy local          Destroy local deployment"
@@ -79,11 +82,14 @@ show_script_help() {
     echo "  -r, --release <name>     Helm release name (default: $DEFAULT_RELEASE_NAME)"
     echo "  -f, --values <file>      Values file (default: $DEFAULT_VALUES_FILE)"
     echo "  -v, --verbose            Verbose output"
+    echo "  --dry-run                Show what would be done without executing"
     echo "  -h, --help               Show this help"
     echo ""
     echo "EXAMPLES:"
     echo "  ./adk-mgmt.sh env check"
+    echo "  ./adk-mgmt.sh build images --dry-run"
     echo "  ./adk-mgmt.sh deploy local"
+    echo "  ./adk-mgmt.sh deploy production"
     echo "  ./adk-mgmt.sh test all"
     echo "  ./adk-mgmt.sh status"
     echo "  ./adk-mgmt.sh logs adk-backend"
@@ -98,6 +104,7 @@ parse_args() {
     RELEASE_NAME="$DEFAULT_RELEASE_NAME"
     VALUES_FILE="$DEFAULT_VALUES_FILE"
     VERBOSE=false
+    DRY_RUN=false
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -115,6 +122,10 @@ parse_args() {
                 ;;
             -v|--verbose)
                 VERBOSE=true
+                shift
+                ;;
+            --dry-run)
+                DRY_RUN=true
                 shift
                 ;;
             -h|--help)
@@ -307,6 +318,19 @@ oauth_setup() {
     echo "   - https://your-domain.com/oauth/oidc/callback"
     echo ""
     
+    # Show specific configuration for current setup
+    if [ -f "terraform/terraform.tfvars.production" ]; then
+        local app_host=$(grep '^app_host' terraform/terraform.tfvars.production | cut -d'"' -f2 2>/dev/null || echo "")
+        if [ -n "$app_host" ]; then
+            echo "🔧 Current Production Configuration:"
+            echo "   Required redirect URI: https://$app_host/oauth/oidc/callback"
+            echo ""
+            echo "   Direct link to update OAuth client:"
+            echo "   https://console.cloud.google.com/apis/credentials/oauthclient/112698224261-ktmjfk2fnhkj0ksjelcuo2gn23jqk8fi.apps.googleusercontent.com?project=agenticds-hackathon-54443"
+            echo ""
+        fi
+    fi
+    
     if confirm_action "Have you configured OAuth in Google Cloud Console?"; then
         env_check
         print_success "OAuth setup complete"
@@ -341,6 +365,10 @@ cmd_deploy() {
 deploy_local() {
     print_step "Deploying to local/development environment using Terraform"
     
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN MODE - No changes will be applied"
+    fi
+    
     check_prerequisites "terraform" "kubectl" "helm"
     
     # Ensure we're using local Docker Desktop context
@@ -351,36 +379,53 @@ deploy_local() {
         kubectl config use-context docker-desktop
     fi
     
-    # Navigate to terraform-local directory
-    local terraform_local_dir="$(dirname "$SCRIPT_DIR")/terraform-local"
-    if [ ! -d "$terraform_local_dir" ]; then
-        print_error "Local Terraform directory not found: $terraform_local_dir"
+    # Navigate to unified terraform directory
+    local terraform_dir="$(dirname "$SCRIPT_DIR")/terraform"
+    if [ ! -d "$terraform_dir" ]; then
+        print_error "Terraform directory not found: $terraform_dir"
         exit 1
     fi
     
-    cd "$terraform_local_dir"
+    cd "$terraform_dir"
+    
+    print_step "Configuring Terraform backend for local deployment..."
+    # Use local backend configuration
+    if [ -f "backend-local.tf.template" ]; then
+        cp backend-local.tf.template backend.tf
+    else
+        print_warning "Local backend configuration not found, using default"
+    fi
     
     print_step "Initializing Terraform for local deployment..."
-    terraform init
+    terraform init -reconfigure
     
     print_step "Planning local deployment..."
-    terraform plan
+    terraform plan -var-file="terraform.tfvars.local"
+    
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN: Would apply local deployment with terraform.tfvars.local"
+        print_success "Dry run completed - no changes applied"
+        return 0
+    fi
     
     print_step "Applying local deployment..."
-    terraform apply -auto-approve
+    terraform apply -var-file="terraform.tfvars.local" -auto-approve
     
     print_success "Local deployment completed successfully"
     
     # Show connection information
     echo ""
     print_header "Connection Information"
-    echo "Namespace: adk-local"
-    echo "Release:   adk-local"
-    echo "Context:   docker-desktop"
+    echo "Environment: local"
+    echo "Namespace:   adk-local"
+    echo "Release:     adk-local"
+    echo "Context:     docker-desktop"
+    echo "State file:  terraform-local.tfstate"
     echo ""
     echo "To access the application:"
-    echo "  kubectl port-forward -n adk-local svc/adk-local 8080:80"
-    echo "  Then open: http://localhost:8080"
+    echo "  Direct access: http://localhost:30080 (NodePort)"
+    echo "  Port-forward:  kubectl port-forward -n adk-local svc/adk-local-open-webui 8080:80"
+    echo "                 Then open: http://localhost:8080"
     echo ""
     echo "To check status:"
     echo "  kubectl get pods -n adk-local"
@@ -388,41 +433,232 @@ deploy_local() {
 }
 
 deploy_production() {
-    print_step "Deploying to GKE production environment"
+    print_step "Deploying to GKE production environment using Terraform"
     
-    check_prerequisites "helm" "kubectl" "gcloud"
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN MODE - No changes will be applied"
+    fi
+    
+    check_prerequisites "terraform" "kubectl" "gcloud"
     check_kubernetes
     env_check
     
-    load_env ".env"
-    
-    # Production-specific configuration
-    local prod_values="$DEFAULT_CHART_DIR/values-gke-production.yaml"
-    if [ ! -f "$prod_values" ]; then
-        print_error "Production values file not found: $prod_values"
+    # Navigate to unified terraform directory
+    local terraform_dir="$(dirname "$SCRIPT_DIR")/terraform"
+    if [ ! -d "$terraform_dir" ]; then
+        print_error "Terraform directory not found: $terraform_dir"
         exit 1
     fi
     
-    print_warning "This will deploy to production environment"
+    cd "$terraform_dir"
+    
+    # Check for production tfvars file
+    if [ ! -f "terraform.tfvars" ] && [ ! -f "terraform.tfvars.production" ]; then
+        print_error "Production tfvars file not found. Expected 'terraform.tfvars' or 'terraform.tfvars.production'"
+        exit 1
+    fi
+    
+    # Use production tfvars file
+    local prod_tfvars="terraform.tfvars"
+    if [ -f "terraform.tfvars.production" ]; then
+        prod_tfvars="terraform.tfvars.production"
+    fi
+    
+    print_warning "This will deploy to production environment using: $prod_tfvars"
     if ! confirm_action "Continue with production deployment?"; then
         exit 0
     fi
     
-    # Deploy with production configuration
-    local temp_values="/tmp/adk-prod-values.yaml"
-    envsubst < "$prod_values" > "$temp_values"
+    # Build production Docker images with x86 architecture
+    build_production_images
     
-    helm upgrade --install "${RELEASE_NAME}-prod" "$DEFAULT_CHART_DIR" \
-        -f "$temp_values" \
-        -n "${NAMESPACE}-prod" \
-        --create-namespace \
-        --wait \
-        --timeout=10m
+    # Return to terraform directory
+    cd "$terraform_dir"
     
-    rm -f "$temp_values"
+    print_step "Configuring Terraform backend for production deployment..."
+    # Use production backend configuration
+    if [ -f "backend-production.tf.template" ]; then
+        cp backend-production.tf.template backend.tf
+    else
+        print_warning "Production backend configuration not found, using default"
+    fi
+    
+    print_step "Initializing Terraform for production deployment..."
+    terraform init -reconfigure
+    
+    print_step "Planning production deployment..."
+    terraform plan -var-file="$prod_tfvars"
+    
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN: Would apply production deployment with $prod_tfvars"
+        print_success "Dry run completed - no changes applied"
+        return 0
+    fi
+    
+    print_step "Applying production deployment..."
+    terraform apply -var-file="$prod_tfvars" -auto-approve
     
     print_success "Production deployment completed successfully"
-    show_connection_info
+    
+    # Show connection information
+    echo ""
+    print_header "Production Deployment Information"
+    echo "Environment: production"
+    echo "State file:  terraform-production.tfstate"
+    echo "Values file: $prod_tfvars"
+    echo ""
+    echo "To check status:"
+    echo "  kubectl get pods"
+    echo "  helm list"
+    echo ""
+    echo "To get outputs:"
+    echo "  terraform output"
+}
+
+# Cloud Build functions for production deployment
+build_production_images() {
+    print_step "Building Docker images using Google Cloud Build"
+    
+    local project_dir="$(dirname "$SCRIPT_DIR")"
+    local terraform_dir="$project_dir/terraform"
+    
+    # Extract project ID and region from terraform vars
+    local prod_tfvars="terraform.tfvars"
+    if [ -f "$terraform_dir/terraform.tfvars.production" ]; then
+        prod_tfvars="terraform.tfvars.production"
+    fi
+    
+    local gcp_project_id=$(grep '^gcp_project_id' "$terraform_dir/$prod_tfvars" | cut -d'"' -f2)
+    local gcp_region=$(grep '^gcp_region' "$terraform_dir/$prod_tfvars" | cut -d'"' -f2)
+    
+    if [ -z "$gcp_project_id" ] || [ -z "$gcp_region" ]; then
+        print_error "Could not extract GCP project ID or region from $prod_tfvars"
+        exit 1
+    fi
+    
+    print_info "Using Cloud Build for project: $gcp_project_id in region: $gcp_region"
+    
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN: Would trigger Cloud Build for production images"
+        source "$SCRIPT_DIR/build-with-cloudbuild.sh"
+        build_with_cloud_build "$gcp_project_id" "$gcp_region" "true"
+        return 0
+    fi
+    
+    # Use the Cloud Build helper script
+    source "$SCRIPT_DIR/build-with-cloudbuild.sh"
+    build_with_cloud_build "$gcp_project_id" "$gcp_region" "false"
+}
+
+# Legacy Docker build function (deprecated)
+build_production_images_legacy() {
+    print_warning "DEPRECATED: Using legacy local Docker build. Consider using Cloud Build instead."
+    print_step "Building Docker images locally for x86 architecture"
+    
+    local project_dir="$(dirname "$SCRIPT_DIR")"
+    local adk_backend_dir="$project_dir/adk-backend"
+    
+    if [ ! -d "$adk_backend_dir" ]; then
+        print_error "ADK backend directory not found: $adk_backend_dir"
+        exit 1
+    fi
+    
+    cd "$adk_backend_dir"
+    
+    # Extract project ID and region from terraform vars
+    local terraform_dir="$project_dir/terraform"
+    local prod_tfvars="terraform.tfvars"
+    if [ -f "$terraform_dir/terraform.tfvars.production" ]; then
+        prod_tfvars="terraform.tfvars.production"
+    fi
+    
+    local gcp_project_id=$(grep '^gcp_project_id' "$terraform_dir/$prod_tfvars" | cut -d'"' -f2)
+    local gcp_region=$(grep '^gcp_region' "$terraform_dir/$prod_tfvars" | cut -d'"' -f2)
+    
+    if [ -z "$gcp_project_id" ] || [ -z "$gcp_region" ]; then
+        print_error "Could not extract GCP project ID or region from $prod_tfvars"
+        exit 1
+    fi
+    
+    local registry_base="$gcp_region-docker.pkg.dev/$gcp_project_id/webui-adk-repo"
+    local adk_image="$registry_base/adk-backend:latest"
+    local ollama_image="$registry_base/ollama-proxy:latest"
+    
+    print_info "Registry: $registry_base"
+    print_info "Building images for project: $gcp_project_id"
+    
+    # Configure Docker for multi-platform builds
+    print_step "Setting up Docker buildx for multi-platform builds"
+    if ! docker buildx inspect multiplatform > /dev/null 2>&1; then
+        print_info "Creating multiplatform builder..."
+        docker buildx create --name multiplatform --platform linux/amd64,linux/arm64 --use
+    else
+        print_info "Using existing multiplatform builder..."
+        docker buildx use multiplatform
+    fi
+    
+    # Authenticate with Google Cloud Artifact Registry
+    print_step "Authenticating with Google Cloud Artifact Registry"
+    gcloud auth configure-docker "$gcp_region-docker.pkg.dev" --quiet
+    
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN: Would build and push the following images:"
+        print_info "  - $adk_image"
+        print_info "  - $ollama_image"
+        return 0
+    fi
+    
+    # Build and push ADK backend image
+    print_step "Building and pushing ADK backend image..."
+    print_info "Building: $adk_image"
+    docker buildx build \
+        --platform linux/amd64 \
+        --tag "$adk_image" \
+        --push \
+        --file Dockerfile \
+        .
+    
+    # Build and push Ollama proxy image
+    print_step "Building and pushing Ollama proxy image..."
+    print_info "Building: $ollama_image"
+    docker buildx build \
+        --platform linux/amd64 \
+        --tag "$ollama_image" \
+        --push \
+        --file Dockerfile.ollama-proxy \
+        .
+    
+    print_success "Successfully built and pushed production images"
+    print_info "ADK Backend: $adk_image"
+    print_info "Ollama Proxy: $ollama_image"
+}
+
+# Build command function
+cmd_build() {
+    case "$SUBCOMMAND" in
+        images)
+            build_production_images
+            ;;
+        legacy)
+            build_production_images_legacy
+            ;;
+        cloudbuild)
+            build_production_images
+            ;;
+        *)
+            if [ -z "$SUBCOMMAND" ]; then
+                # Default to Cloud Build
+                build_production_images
+            else
+                print_error "Unknown build command: $SUBCOMMAND"
+                echo "Available options:"
+                echo "  images     - Build using Cloud Build (default)"
+                echo "  cloudbuild - Build using Cloud Build (explicit)"
+                echo "  legacy     - Build using local Docker (deprecated)"
+                exit 1
+            fi
+            ;;
+    esac
 }
 
 deploy_quick() {
@@ -492,6 +728,10 @@ cmd_destroy() {
 destroy_local() {
     print_step "Destroying local deployment"
     
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN MODE - No resources will be destroyed"
+    fi
+    
     check_prerequisites "terraform" "kubectl"
     
     # Ensure we're using local Docker Desktop context
@@ -501,34 +741,7 @@ destroy_local() {
         kubectl config use-context docker-desktop
     fi
     
-    # Navigate to terraform-local directory
-    local terraform_local_dir="$(dirname "$SCRIPT_DIR")/terraform-local"
-    if [ ! -d "$terraform_local_dir" ]; then
-        print_error "Local Terraform directory not found: $terraform_local_dir"
-        exit 1
-    fi
-    
-    cd "$terraform_local_dir"
-    
-    print_step "Destroying local Terraform deployment..."
-    terraform destroy -auto-approve
-    
-    print_success "Local deployment destroyed successfully"
-}
-
-destroy_production() {
-    print_step "Destroying production deployment"
-    print_warning "This will destroy ALL production resources including the GKE cluster!"
-    
-    read -p "Are you absolutely sure? Type 'destroy-production' to confirm: " confirmation
-    if [ "$confirmation" != "destroy-production" ]; then
-        print_error "Confirmation failed. Aborting."
-        exit 1
-    fi
-    
-    check_prerequisites "terraform" "gcloud"
-    
-    # Navigate to terraform directory
+    # Navigate to unified terraform directory
     local terraform_dir="$(dirname "$SCRIPT_DIR")/terraform"
     if [ ! -d "$terraform_dir" ]; then
         print_error "Terraform directory not found: $terraform_dir"
@@ -537,10 +750,85 @@ destroy_production() {
     
     cd "$terraform_dir"
     
+    print_step "Configuring Terraform backend for local deployment..."
+    # Use local backend configuration
+    if [ -f "backend-local.tf.template" ]; then
+        cp backend-local.tf.template backend.tf
+    else
+        print_warning "Local backend configuration not found, using default"
+    fi
+    
+    print_step "Initializing Terraform for local deployment..."
+    terraform init -reconfigure
+    
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN: Would destroy local deployment with terraform.tfvars.local"
+        terraform plan -destroy -var-file="terraform.tfvars.local"
+        print_success "Dry run completed - no resources destroyed"
+        return 0
+    fi
+    
+    print_step "Destroying local Terraform deployment..."
+    terraform destroy -var-file="terraform.tfvars.local" -auto-approve
+    
+    print_success "Local deployment destroyed successfully"
+    print_info "Local state file 'terraform-local.tfstate' preserved for potential restore"
+}
+
+destroy_production() {
+    print_step "Destroying production deployment"
+    print_warning "This will destroy ALL production resources including the GKE cluster!"
+    
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN MODE - No resources will be destroyed"
+    else
+        read -p "Are you absolutely sure? Type 'destroy-production' to confirm: " confirmation
+        if [ "$confirmation" != "destroy-production" ]; then
+            print_error "Confirmation failed. Aborting."
+            exit 1
+        fi
+    fi
+    
+    check_prerequisites "terraform" "gcloud"
+    
+    # Navigate to unified terraform directory
+    local terraform_dir="$(dirname "$SCRIPT_DIR")/terraform"
+    if [ ! -d "$terraform_dir" ]; then
+        print_error "Terraform directory not found: $terraform_dir"
+        exit 1
+    fi
+    
+    cd "$terraform_dir"
+    
+    # Check for production tfvars file
+    local prod_tfvars="terraform.tfvars"
+    if [ -f "terraform.tfvars.production" ]; then
+        prod_tfvars="terraform.tfvars.production"
+    fi
+    
+    print_step "Configuring Terraform backend for production deployment..."
+    # Use production backend configuration
+    if [ -f "backend-production.tf.template" ]; then
+        cp backend-production.tf.template backend.tf
+    else
+        print_warning "Production backend configuration not found, using default"
+    fi
+    
+    print_step "Initializing Terraform for production deployment..."
+    terraform init -reconfigure
+    
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN: Would destroy production deployment with $prod_tfvars"
+        terraform plan -destroy -var-file="$prod_tfvars"
+        print_success "Dry run completed - no resources destroyed"
+        return 0
+    fi
+    
     print_step "Destroying production Terraform deployment..."
-    terraform destroy
+    terraform destroy -var-file="$prod_tfvars"
     
     print_success "Production deployment destroyed"
+    print_info "Production state file 'terraform-production.tfstate' preserved for potential restore"
 }
 
 # Testing functions
@@ -1140,6 +1428,9 @@ main() {
     
     # Execute command
     case "$COMMAND" in
+        build)
+            cmd_build
+            ;;
         env)
             cmd_env
             ;;

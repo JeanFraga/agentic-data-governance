@@ -89,3 +89,6 @@ service-account-key.json
 *key*.json
 *key*.pem
 terraform/tfplan
+PRODUCTION_DEPLOYMENT_READY.md
+DOMAIN_UPDATE_SUMMARY.md
+terraform/terraform.tfvars.production

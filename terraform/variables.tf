@@ -1,6 +1,17 @@
+variable "environment" {
+  type        = string
+  description = "Deployment environment: 'local' for Docker Desktop, 'production' for GCP"
+  default     = "production"
+  validation {
+    condition     = contains(["local", "production"], var.environment)
+    error_message = "Environment must be either 'local' or 'production'."
+  }
+}
+
 variable "gcp_project_id" {
   type        = string
-  description = "The Google Cloud project ID."
+  description = "The Google Cloud project ID. Required for production, optional for local."
+  default     = ""
 }
 
 variable "gcp_region" {
@@ -11,7 +22,8 @@ variable "gcp_region" {
 
 variable "github_repo" {
   type        = string
-  description = "The GitHub repository in 'owner/repo' format for Workload Identity Federation."
+  description = "The GitHub repository in 'owner/repo' format for Workload Identity Federation. Required for production."
+  default     = ""
 }
 
 variable "app_host" {
@@ -22,14 +34,16 @@ variable "app_host" {
 
 variable "oauth_client_id" {
   type        = string
-  description = "The Google OAuth Client ID for SSO."
+  description = "The Google OAuth Client ID for SSO. Required for production, optional for local."
   sensitive   = true
+  default     = ""
 }
 
 variable "oauth_client_secret" {
   type        = string
-  description = "The Google OAuth Client Secret for SSO."
+  description = "The Google OAuth Client Secret for SSO. Required for production, optional for local."
   sensitive   = true
+  default     = ""
 }
 
 variable "adk_image_tag" {
@@ -104,4 +118,41 @@ variable "tls_email" {
   type        = string
   description = "Email address for Let's Encrypt TLS certificate"
   default     = "admin@example.com"
+}
+
+# Local Development Variables
+variable "namespace" {
+  type        = string
+  description = "Kubernetes namespace for local deployments"
+  default     = "adk-local"
+}
+
+variable "release_name" {
+  type        = string
+  description = "Helm release name"
+  default     = "" # Will be computed based on environment
+}
+
+variable "local_image_repository_adk" {
+  type        = string
+  description = "Local Docker image repository for ADK backend"
+  default     = "adk-backend"
+}
+
+variable "local_image_repository_ollama" {
+  type        = string
+  description = "Local Docker image repository for Ollama proxy"
+  default     = "ollama-proxy"
+}
+
+variable "local_image_tag" {
+  type        = string
+  description = "Docker image tag for local development"
+  default     = "local"
+}
+
+variable "local_nodeport" {
+  type        = number
+  description = "NodePort for local access"
+  default     = 30080
 }

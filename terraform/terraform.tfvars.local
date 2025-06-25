@@ -1,0 +1,19 @@
+# Local Development Configuration
+environment                   = "local"
+deploy_kubernetes_resources   = true
+
+# Local-specific settings
+namespace                    = "adk-local"
+replica_count               = 1
+local_image_repository_adk  = "adk-backend"
+local_image_repository_ollama = "ollama-proxy"
+local_image_tag             = "local"
+local_nodeport              = 30080
+
+# Minimal required values (not used in local mode)
+gcp_project_id              = ""
+github_repo                 = ""
+app_host                    = ""
+oauth_client_id             = ""
+oauth_client_secret         = ""
+admin_email                 = "admin@localhost"
