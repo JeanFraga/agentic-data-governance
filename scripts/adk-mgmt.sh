@@ -369,7 +369,15 @@ deploy_local() {
         print_info "🔍 DRY RUN MODE - No changes will be applied"
     fi
     
-    check_prerequisites "terraform" "kubectl" "helm"
+    check_prerequisites "terraform" "kubectl" "helm" "docker"
+    
+    # Build required Docker images for local deployment
+    if [ "$DRY_RUN" != "true" ]; then
+        print_step "Building Docker images for local deployment..."
+        build_local_images
+    else
+        print_info "🔍 DRY RUN: Would build Docker images for local deployment"
+    fi
     
     # Ensure we're using local Docker Desktop context
     print_step "Checking Kubernetes context..."
@@ -513,6 +521,66 @@ deploy_production() {
     echo ""
     echo "To get outputs:"
     echo "  terraform output"
+}
+
+# Local Docker build functions for development deployment
+build_local_images() {
+    print_step "Building Docker images for local deployment"
+    
+    local project_dir="$(dirname "$SCRIPT_DIR")"
+    local adk_backend_dir="$project_dir/adk-backend"
+    
+    if [ ! -d "$adk_backend_dir" ]; then
+        print_error "ADK backend directory not found: $adk_backend_dir"
+        exit 1
+    fi
+    
+    print_info "Building ADK backend image locally..."
+    cd "$adk_backend_dir"
+    
+    if [ "$DRY_RUN" = "true" ]; then
+        print_info "🔍 DRY RUN: Would build adk-backend:local image"
+    else
+        # Build ADK backend image with local tag
+        docker build -t adk-backend:local .
+        if [ $? -eq 0 ]; then
+            print_success "Successfully built adk-backend:local"
+        else
+            print_error "Failed to build adk-backend:local"
+            exit 1
+        fi
+    fi
+    
+    # Check if ollama-proxy needs to be built (look for existing Dockerfile)
+    cd "$project_dir"
+    if [ -f "ollama-proxy/Dockerfile" ] || [ -f "adk-backend/Dockerfile.ollama-proxy" ]; then
+        print_info "Building Ollama proxy image locally..."
+        if [ "$DRY_RUN" = "true" ]; then
+            print_info "🔍 DRY RUN: Would build ollama-proxy:local image"
+        else
+            # Build from adk-backend directory if Dockerfile.ollama-proxy exists there
+            if [ -f "$adk_backend_dir/Dockerfile.ollama-proxy" ]; then
+                cd "$adk_backend_dir"
+                docker build -f Dockerfile.ollama-proxy -t ollama-proxy:local .
+            elif [ -f "ollama-proxy/Dockerfile" ]; then
+                cd "ollama-proxy"
+                docker build -t ollama-proxy:local .
+            fi
+            
+            if [ $? -eq 0 ]; then
+                print_success "Successfully built ollama-proxy:local"
+            else
+                print_error "Failed to build ollama-proxy:local"
+                exit 1
+            fi
+        fi
+    else
+        print_warning "No Ollama proxy Dockerfile found. Using OpenWebUI's built-in Ollama connection."
+        print_info "Note: You may need to create ollama-proxy image or configure alternative connection method."
+    fi
+    
+    cd "$project_dir"
+    print_success "Local image build completed"
 }
 
 # Cloud Build functions for production deployment

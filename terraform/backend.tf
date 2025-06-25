@@ -1,7 +1,7 @@
-# Production backend configuration
-# Use this for production deployment to GCP
+# Local development backend configuration
+# Use this for local development with Docker Desktop
 terraform {
   backend "local" {
-    path = "terraform-production.tfstate"
+    path = "terraform-local.tfstate"
   }
 }

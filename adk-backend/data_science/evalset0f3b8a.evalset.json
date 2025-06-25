@@ -1,0 +1,18 @@
+{
+  "eval_set_id": "evalset0f3b8a",
+  "name": "evalset0f3b8a",
+  "description": null,
+  "eval_cases": [
+    {
+      "eval_id": "case8e6a42",
+      "conversation": [],
+      "session_input": {
+        "app_name": "data_science",
+        "user_id": "user",
+        "state": {}
+      },
+      "creation_timestamp": 1750534795.486573
+    }
+  ],
+  "creation_timestamp": 1750534775.360608
+}
