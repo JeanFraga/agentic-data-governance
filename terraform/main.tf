@@ -100,10 +100,11 @@ resource "google_project_iam_member" "cloudbuild_logging" {
 }
 
 resource "google_container_cluster" "primary" {
-  count            = local.is_production ? 1 : 0
-  name             = "webui-adk-cluster"
-  location         = var.gcp_region
-  enable_autopilot = true
+  count               = local.is_production ? 1 : 0
+  name                = "webui-adk-cluster"
+  location            = var.gcp_region
+  enable_autopilot    = true
+  deletion_protection = false
   depends_on = [
     google_project_service.gke_api
   ]
