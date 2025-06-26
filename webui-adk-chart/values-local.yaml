@@ -53,7 +53,7 @@ adkBackend:
     # Use the locally built ADK backend image
     repository: "adk-backend"
     tag: "local"
-    pullPolicy: Never  # Use local images only, don't try to pull from registry
+    pullPolicy: IfNotPresent
   port: ${ADK_BACKEND_PORT}
   gcp:
     projectId: "${GCP_PROJECT_ID}"
@@ -88,6 +88,6 @@ ollamaProxy:
     # Use the locally built Ollama proxy image
     repository: "ollama-proxy"
     tag: "local"
-    pullPolicy: Never  # Use local images only, don't try to pull from registry
+    pullPolicy: IfNotPresent
   port: ${OLLAMA_PROXY_PORT}
   logLevel: "INFO"

@@ -22,10 +22,10 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock ./
 
 # Install only production dependencies
-RUN poetry install --only=main --no-root
+RUN poetry install --only=main --no-dev
 
 # Stage 2: Final production stage
-FROM python:3.13-slim as final
+FROM python:3.12-slim as final
 
 # Install system dependencies needed at runtime
 RUN apt-get update && apt-get install -y \
@@ -38,14 +38,14 @@ USER appuser
 WORKDIR /home/appuser
 
 # Copy the installed dependencies from the builder stage
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy the application source code
 COPY --chown=appuser:appuser . ./
 
 # Set environment variables for the ADK agent
-ENV PYTHONPATH=/home/appuser \
+ENV PYTHONPATH=/home/appuser:$PYTHONPATH \
     PATH=/usr/local/bin:$PATH \
     GOOGLE_GENAI_USE_VERTEXAI=TRUE \
     ADK_LOCAL_MODE=FALSE
